@@ -19,7 +19,7 @@ Import the IOC file (or the project) to see these pins.
 | -             | PD8     | USART3_TX      | -       | USART3_TX |
 
 ### SPI
-SPI1 is used. You'll have to set the data size to 8 bits and the prescaler for the clock parameters to 32.
+SPI1 is used in Full-Duplex Master mode. You'll have to change Data Size to 8 Bits and the Prescaler to 32.
 
 ### USART3
-We're using the `Asynchronous` mode, but other than that the default settings are used. Make sure the correct MCU pins are being used though.
+Asynchronous mode.

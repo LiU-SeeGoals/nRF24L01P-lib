@@ -21,7 +21,7 @@ You might have to resolve clock issues from the MX view.
 | -             | PD9     | USART3_TX      | -       | USART3_TX |
 
 ### SPI
-SPI1 is used in Full-Duplex Master mode. You'll have to change Data Size to 8 Bits and the Prescaler to ...
+SPI1 is used in Full-Duplex Master mode. You'll have to change Data Size to 8 Bits and the Prescaler to 32.
 
 ### USART3
 Asynchronous mode.

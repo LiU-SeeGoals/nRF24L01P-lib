@@ -1,5 +1,5 @@
 # nRF24L01+ library
-This is a library for uing the wireless module nRF24L01+ through the STMicroelectronics HAL layer.
+This is a library for using the wireless module nRF24L01+ through the STMicroelectronics HAL layer.
 
 Please note that if a device other than `STM32H563xx` and `STM32H755xx` is to be used, then the HAL library includes in `nrf24l01.h` has to be extended.
 
