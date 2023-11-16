@@ -9,8 +9,17 @@
 #include "stm32h7xx_hal.h"
 #endif
 
-/* Misc */
+/**
+ * @name Defines
+ * @anchor defines
+ *
+ * Ungrouped defines
+ */
+//!@{
+
+//! Timeout for all SPI communication attempts.
 #define NRF_SPI_TIMEOUT     10
+//!@}
 
 /**
  * @name Commands
@@ -34,6 +43,7 @@
 /**
  * @name Registers
  * @anchor registers
+ * @anchor register
  *
  * Available registers on the device.
  *
@@ -73,21 +83,26 @@ void NRF_CE_reset();
 /**
  * \brief Initalises the library and make the device entery standby-I mode.
  *
- * Thorough description.
- *
  * \param handle A pointer at the SPI_HandleTypeDef which HAL creates for the
- *        SPI communication.
+ *          SPI communication.
+ * \param PortCSN A pointer at the GPIO_TypeDef for the port that the device CSN
+ *          pin is on.
+ * \param PinCSN The pin that the devices CSN is connected to.
+ * \param PortCE A pointer at the GPIO_TypeDef far the port that the device CE
+ *          pin is on.
+ * \param PinCE The pin that the devices CE is connected to.
  * \return NRF_Status
  */
-NRF_Status NRF_Init(SPI_HandleTypeDef *handle);
+NRF_Status NRF_Init(SPI_HandleTypeDef *handle,
+                    GPIO_TypeDef *PortCSN,
+                    uint16_t PinCSN,
+                    GPIO_TypeDef *PortCE,
+                    uint16_t PinCE);
 
 /**
  * \brief Sends a command to the device.
  *
- * Thorough description.
- *
  * \param cmd One of the available @ref commands.
- *
  * \return NRF_Status
  */
 NRF_Status NRF_SendCommand(uint8_t cmd);
@@ -98,7 +113,6 @@ NRF_Status NRF_SendCommand(uint8_t cmd);
  * \param reg One of the available @ref registers.
  * \param write A pointer to the buffer to write.
  * \param length The length of the buffer.
- *
  * \return NRF_Status
  */
 NRF_Status NRF_WriteRegister(uint8_t reg, uint8_t *write, uint8_t length);
@@ -109,7 +123,6 @@ NRF_Status NRF_WriteRegister(uint8_t reg, uint8_t *write, uint8_t length);
  * \param reg One of the available @ref registers.
  * \param read A pointer to the buffer to read to.
  * \param length The length of the buffer.
- *
  * \return NRF_Status
  */
 NRF_Status NRF_ReadRegister(uint8_t reg, uint8_t *read, uint8_t length);
@@ -119,7 +132,7 @@ NRF_Status NRF_ReadRegister(uint8_t reg, uint8_t *read, uint8_t length);
  *
  * We write a predetermined value to the TX_ADDR @ref register.
  * Then we read the value of the register.
- * If the two values correspond to eachother SPI is working.
+ * If the two values are the same then SPI is working.
  *
  * \return NRF_Status
  */

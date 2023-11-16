@@ -21,28 +21,35 @@
 #define FIFO_TX_REUSE 0x40
 
 // Local globals
-SPI_HandleTypeDef *hspi;
+SPI_HandleTypeDef *NRF_HSPI;
+GPIO_TypeDef *NRF_CSN_Port;
+uint16_t NRF_CSN_Pin;
+GPIO_TypeDef *NRF_CE_Port;
+uint16_t NRF_CE_Pin;
 
 // Functions
 void NRF_CSN_set() {
-  HAL_GPIO_WritePin(NRF_CSN_GPIO_Port, NRF_CSN_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(NRF_CSN_Port, NRF_CSN_Pin, GPIO_PIN_SET);
 }
 
 void NRF_CSN_reset() {
-  HAL_GPIO_WritePin(NRF_CSN_GPIO_Port, NRF_CSN_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(NRF_CSN_Port, NRF_CSN_Pin, GPIO_PIN_RESET);
 }
 
 void NRF_CE_set() {
-  HAL_GPIO_WritePin(NRF_CE_GPIO_Port, NRF_CE_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(NRF_CE_Port, NRF_CE_Pin, GPIO_PIN_SET);
 }
 
 void NRF_CE_reset() {
-  HAL_GPIO_WritePin(NRF_CE_GPIO_Port, NRF_CE_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(NRF_CE_Port, NRF_CE_Pin, GPIO_PIN_RESET);
 }
 
-// Puts the device in standby-1 mode (table 15, p.23)
-NRF_Status NRF_Init(SPI_HandleTypeDef *handle) {
-  hspi = handle;
+NRF_Status NRF_Init(SPI_HandleTypeDef *handle, GPIO_TypeDef *PortCSN, uint16_t PinCSN, GPIO_TypeDef *PortCE, uint16_t PinCE) {
+  NRF_HSPI = handle;
+  NRF_CSN_Port = PortCSN;
+  NRF_CSN_Pin = PinCSN;
+  NRF_CE_Port = PortCE;
+  NRF_CE_Pin = PinCE;
 
   // Reset state
   NRF_CSN_set();
@@ -59,7 +66,7 @@ NRF_Status NRF_SendCommand(uint8_t cmd) {
   uint8_t status;
 
   NRF_CSN_reset();
-  ret = HAL_SPI_TransmitReceive(hspi, &cmd, &status, 1, NRF_SPI_TIMEOUT);
+  ret = HAL_SPI_TransmitReceive(NRF_HSPI, &cmd, &status, 1, NRF_SPI_TIMEOUT);
   if (ret != HAL_OK) {
     return ret;
   }
@@ -74,11 +81,11 @@ NRF_Status NRF_WriteRegister(uint8_t reg, uint8_t *write, uint8_t length) {
   uint8_t cmd = NRF_CMD_WRITE | reg;
 
   NRF_CSN_reset();
-  ret = HAL_SPI_TransmitReceive(hspi, &cmd, &status, 1, NRF_SPI_TIMEOUT);
+  ret = HAL_SPI_TransmitReceive(NRF_HSPI, &cmd, &status, 1, NRF_SPI_TIMEOUT);
   if (ret != HAL_OK) {
     return ret;
   }
-  ret = HAL_SPI_Transmit(hspi, write, length, NRF_SPI_TIMEOUT);
+  ret = HAL_SPI_Transmit(NRF_HSPI, write, length, NRF_SPI_TIMEOUT);
   if (ret != HAL_OK) {
     return ret;
   }
@@ -93,11 +100,11 @@ NRF_Status NRF_ReadRegister(uint8_t reg, uint8_t *read, uint8_t length) {
   uint8_t cmd = NRF_CMD_READ | reg;
 
   NRF_CSN_reset();
-  ret = HAL_SPI_TransmitReceive(hspi, &cmd, &status, 1, NRF_SPI_TIMEOUT);
+  ret = HAL_SPI_TransmitReceive(NRF_HSPI, &cmd, &status, 1, NRF_SPI_TIMEOUT);
   if(ret != HAL_OK) {
     return ret;
   }
-  ret = HAL_SPI_Receive(hspi, read, length, NRF_SPI_TIMEOUT);
+  ret = HAL_SPI_Receive(NRF_HSPI, read, length, NRF_SPI_TIMEOUT);
   if(ret != HAL_OK) {
     return ret;
   }
@@ -106,8 +113,6 @@ NRF_Status NRF_ReadRegister(uint8_t reg, uint8_t *read, uint8_t length) {
   return ret;
 }
 
-// Verifies SPI by setting the TX address and reading
-// it from the device.
 NRF_Status NRF_VerifySPI() {
   NRF_Status ret = HAL_OK;
   uint8_t write[5] = "0x57!";
@@ -195,11 +200,11 @@ NRF_Status NRF_WritePayload(uint8_t *payload, uint8_t length) {
   uint8_t cmd = NRF_CMD_W_TX_PAYLOAD;
 
   NRF_CSN_reset();
-  ret = HAL_SPI_TransmitReceive(hspi, &cmd, &status, 1, NRF_SPI_TIMEOUT);
+  ret = HAL_SPI_TransmitReceive(NRF_HSPI, &cmd, &status, 1, NRF_SPI_TIMEOUT);
   if(ret != HAL_OK) {
     return ret;
   }
-  ret = HAL_SPI_Transmit(hspi, payload, length, NRF_SPI_TIMEOUT);
+  ret = HAL_SPI_Transmit(NRF_HSPI, payload, length, NRF_SPI_TIMEOUT);
   if(ret != HAL_OK) {
     return ret;
   }
@@ -214,11 +219,11 @@ NRF_Status NRF_ReadPayload(uint8_t *payload, uint8_t length) {
   uint8_t cmd = NRF_CMD_R_RX_PAYLOAD;
 
   NRF_CSN_reset();
-  ret = HAL_SPI_TransmitReceive(hspi, &cmd, &status, 1, NRF_SPI_TIMEOUT);
+  ret = HAL_SPI_TransmitReceive(NRF_HSPI, &cmd, &status, 1, NRF_SPI_TIMEOUT);
   if(ret != HAL_OK) {
     return ret;
   }
-  ret = HAL_SPI_Receive(hspi, payload, length, NRF_SPI_TIMEOUT);
+  ret = HAL_SPI_Receive(NRF_HSPI, payload, length, NRF_SPI_TIMEOUT);
   if(ret != HAL_OK) {
     return ret;
   }
@@ -235,7 +240,7 @@ NRF_Status NRF_GetStatus(uint8_t *status) {
   uint8_t cmd = NRF_CMD_NOP;
 
   NRF_CSN_reset();
-  ret = HAL_SPI_TransmitReceive(hspi, &cmd, status, 1, NRF_SPI_TIMEOUT);
+  ret = HAL_SPI_TransmitReceive(NRF_HSPI, &cmd, status, 1, NRF_SPI_TIMEOUT);
   if(ret != HAL_OK) {
     return ret;
   }
@@ -257,8 +262,8 @@ NRF_Status NRF_PrintStatus() {
   }
 
   printf("Status register: %02X\r\n", status);
-  printf("CE: %d\r\n", HAL_GPIO_ReadPin(NRF_CE_GPIO_Port, NRF_CE_Pin));
-  printf("CSN: %d\r\n", HAL_GPIO_ReadPin(NRF_CSN_GPIO_Port, NRF_CSN_Pin));
+  printf("CE: %d\r\n", HAL_GPIO_ReadPin(NRF_CE_Port, NRF_CE_Pin));
+  printf("CSN: %d\r\n", HAL_GPIO_ReadPin(NRF_CSN_Port, NRF_CSN_Pin));
   printf("TX_FULL:  %1X\r\n", status & STAT_TX_FULL_BIT);
   printf("RX_P_NO:  %1X\r\n", (status & STAT_RX_P_NO_BITS) >> 1);
   printf("MAX_RT:   %1X\r\n", (status & STAT_MAX_RT_BIT) >> 4);
