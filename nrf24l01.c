@@ -1,24 +1,27 @@
 #include "nrf24l01.h"
 
-/* Local defines */
+/*
+ * Local defines
+ */
+
 // Config bits
-#define CFG_PRIM_RX_BIT 0x01
-#define CFG_PWR_UP_BIT  0x02
-#define CFG_EN_CRC_BIT  0x08
+#define CFG_BIT_EN_CRC  0x3
+#define CFG_BIT_PWR_UP  0x1
+#define CFG_BIT_PRIM_RX 0x0
 
 // Status bits
-#define STAT_TX_FULL_BIT  0x01
-#define STAT_RX_P_NO_BITS 0x0e
-#define STAT_MAX_RT_BIT   0x10
-#define STAT_TX_DS_BIT    0x20
-#define STAT_RX_DR_BIT    0x40
+#define STATUS_BIT_RX_DR   0x6
+#define STATUS_BIT_TX_DS   0x5
+#define STATUS_BIT_MAX_RT  0x4
+#define STATUS_BIT_RX_P_NO 0x1 // consists of bits 1-3
+#define STATUS_BIT_TX_FULL 0x0
 
 // FIFO status bits
-#define FIFO_RX_EMPTY 0x01
-#define FIFO_RX_FULL  0x02
-#define FIFO_TX_EMPTY 0x10
-#define FIFO_TX_FULL  0x20
-#define FIFO_TX_REUSE 0x40
+#define FIFO_STATUS_BIT_TX_REUSE 0x6
+#define FIFO_STATUS_BIT_TX_FULL  0x5
+#define FIFO_STATUS_BIT_TX_EMPTY 0x4
+#define FIFO_STATUS_BIT_RX_FULL  0x1
+#define FIFO_STATUS_BIT_RX_EMPTY 0x0
 
 /* Local globals */
 SPI_HandleTypeDef *HSPI;
@@ -27,8 +30,40 @@ uint16_t NRF_CSN_Pin;
 GPIO_TypeDef *NRF_CE_Port;
 uint16_t NRF_CE_Pin;
 
+
 /*
+ * Private functions
+ */
+
+void csn_set() {
+  HAL_GPIO_WritePin(NRF_CSN_Port, NRF_CSN_Pin, GPIO_PIN_SET);
+}
+
+void csn_reset() {
+  HAL_GPIO_WritePin(NRF_CSN_Port, NRF_CSN_Pin, GPIO_PIN_RESET);
+}
+
+void ce_set() {
+  HAL_GPIO_WritePin(NRF_CE_Port, NRF_CE_Pin, GPIO_PIN_SET);
+}
+
+void ce_reset() {
+  HAL_GPIO_WritePin(NRF_CE_Port, NRF_CE_Pin, GPIO_PIN_RESET);
+}
+
+uint8_t read_csn() {
+  return HAL_GPIO_ReadPin(NRF_CSN_Port, NRF_CSN_Pin);
+}
+
+uint8_t read_ce() {
+  return HAL_GPIO_ReadPin(NRF_CE_Port, NRF_CE_Pin);
+}
+
+
+/*
+ *
  * Main functions
+ *
  */
 
 NRF_Status NRF_Init(SPI_HandleTypeDef *handle, GPIO_TypeDef *PortCSN, uint16_t PinCSN, GPIO_TypeDef *PortCE, uint16_t PinCE) {
@@ -38,12 +73,13 @@ NRF_Status NRF_Init(SPI_HandleTypeDef *handle, GPIO_TypeDef *PortCSN, uint16_t P
   NRF_CE_Port = PortCE;
   NRF_CE_Pin = PinCE;
 
-  // Reset state
-  NRF_CSN_set();
-  NRF_CE_reset();
+  // Make sure CSN i pulled high
+  csn_set();
 
-  // Power on reset
+  // Takes ~100ms from power on to start up
   HAL_Delay(100);
+
+  NRF_EnterMode(NRF_MODE_STANDBY1);
 
   return HAL_OK;
 }
@@ -52,12 +88,12 @@ NRF_Status NRF_SendCommand(uint8_t cmd) {
   NRF_Status ret = HAL_OK;
   uint8_t status;
 
-  NRF_CSN_reset();
+  csn_reset();
   ret = HAL_SPI_TransmitReceive(HSPI, &cmd, &status, 1, NRF_SPI_TIMEOUT);
   if (ret != HAL_OK) {
     return ret;
   }
-  NRF_CSN_set();
+  csn_set();
 
   return ret;
 }
@@ -66,7 +102,7 @@ NRF_Status NRF_SendWriteCommand(uint8_t cmd, uint8_t *write, uint8_t length) {
   NRF_Status ret = HAL_OK;
   uint8_t status;
 
-  NRF_CSN_reset();
+  csn_reset();
   ret = HAL_SPI_TransmitReceive(HSPI, &cmd, &status, 1, NRF_SPI_TIMEOUT);
   if (ret != HAL_OK) {
     return ret;
@@ -75,7 +111,7 @@ NRF_Status NRF_SendWriteCommand(uint8_t cmd, uint8_t *write, uint8_t length) {
   if (ret != HAL_OK) {
     return ret;
   }
-  NRF_CSN_set();
+  csn_set();
 
   return ret;
 }
@@ -84,7 +120,7 @@ NRF_Status NRF_SendReadCommand(uint8_t cmd, uint8_t *read, uint8_t length) {
   NRF_Status ret = HAL_OK;
   uint8_t status;
 
-  NRF_CSN_reset();
+  csn_reset();
   ret = HAL_SPI_TransmitReceive(HSPI, &cmd, &status, 1, NRF_SPI_TIMEOUT);
   if(ret != HAL_OK) {
     return ret;
@@ -93,32 +129,115 @@ NRF_Status NRF_SendReadCommand(uint8_t cmd, uint8_t *read, uint8_t length) {
   if(ret != HAL_OK) {
     return ret;
   }
-  NRF_CSN_set();
+  csn_set();
 
   return ret;
 }
 
-void NRF_CSN_set() {
-  HAL_GPIO_WritePin(NRF_CSN_Port, NRF_CSN_Pin, GPIO_PIN_SET);
-}
-
-void NRF_CSN_reset() {
-  HAL_GPIO_WritePin(NRF_CSN_Port, NRF_CSN_Pin, GPIO_PIN_RESET);
-}
-
-void NRF_CE_set() {
-  HAL_GPIO_WritePin(NRF_CE_Port, NRF_CE_Pin, GPIO_PIN_SET);
-}
-
-void NRF_CE_reset() {
-  HAL_GPIO_WritePin(NRF_CE_Port, NRF_CE_Pin, GPIO_PIN_RESET);
-}
 
 
 /*
- * Helper functions
+ *
+ * Device control
+ *
  */
 
+NRF_Status NRF_EnterMode(uint8_t mode) {
+  NRF_Status ret = HAL_OK;
+
+  switch(mode) {
+    case NRF_MODE_POWERDOWN:
+      // Can come from any mode
+      ret = NRF_ResetRegisterBit(NRF_REG_CONFIG, CFG_BIT_PWR_UP);
+    case NRF_MODE_STANDBY1:
+      // We expect to come from powerdown
+      ce_reset();
+      ret = NRF_SetRegisterBit(NRF_REG_CONFIG, CFG_BIT_PWR_UP);
+      HAL_Delay(2);
+    case NRF_MODE_RX:
+    case NRF_MODE_TX:
+      // We expect to come from standby-I
+      if (mode == NRF_MODE_TX) {
+        ret = NRF_ResetRegisterBit(NRF_REG_CONFIG, CFG_BIT_PRIM_RX);
+      } else {
+        ret = NRF_SetRegisterBit(NRF_REG_CONFIG, CFG_BIT_PRIM_RX);
+      }
+
+      // Enter mode
+      ce_set();
+      break;
+    default:
+      ret = HAL_ERROR;
+      break;
+  }
+
+  return ret;
+}
+
+NRF_Status NRF_WritePayload(uint8_t *payload, uint8_t length) {
+  return NRF_SendWriteCommand(NRF_CMD_W_TX_PAYLOAD, payload, length);
+}
+
+NRF_Status NRF_ReadPayload(uint8_t *read, uint8_t length) {
+  return NRF_SendReadCommand(NRF_CMD_R_RX_PAYLOAD, read, length);
+}
+
+NRF_Status NRF_Transmit(uint8_t *payload, uint8_t length) {
+  NRF_Status ret = HAL_OK;
+  ret = NRF_WritePayload(payload, length);
+  if(ret != HAL_OK) {
+    return ret;
+  }
+
+  ce_set();
+  HAL_Delay(1);
+  ce_reset();
+
+  return ret;
+}
+
+NRF_Status NRF_TransmitAndWait(uint8_t *payload, uint8_t length) {
+  NRF_Status ret = HAL_OK;
+  ret = NRF_WritePayload(payload, length);
+  if(ret != HAL_OK) {
+    return ret;
+  }
+
+  ce_set();
+  uint8_t status;
+  for(;;) {
+    status = NRF_ReadStatus();
+    if (status & (1<<STATUS_BIT_TX_DS)) {
+      // Packet transmitted
+      ret = NRF_SetRegisterBit(NRF_REG_STATUS, STATUS_BIT_TX_DS); // clear flag
+      break;
+    } else if (status & (1<<STATUS_BIT_MAX_RT)) {
+      // Max retransmits reached.
+      NRF_SetRegisterBit(NRF_REG_STATUS, STATUS_BIT_MAX_RT); // clear flag
+      ret = HAL_ERROR;
+      break;
+    }
+  }
+  ce_reset();
+
+  return ret;
+}
+
+NRF_Status NRF_WritePayloadNoAck(uint8_t *payload, uint8_t length) {
+  return NRF_SendWriteCommand(NRF_CMD_W_TX_PAYLOAD_NO_ACK, payload, length);
+}
+
+NRF_Status NRF_WriteAckPayload(uint8_t *payload, uint8_t length) {
+  return NRF_SendWriteCommand(NRF_CMD_W_ACK_PAYLOAD, payload, length);
+}
+
+
+
+/*
+ *
+ * Register helpers
+ *
+ */
 
 /* Writing */
 NRF_Status NRF_WriteRegister(uint8_t reg, uint8_t *write, uint8_t length) {
@@ -154,10 +273,6 @@ NRF_Status NRF_ResetRegisterBit(uint8_t reg, uint8_t bit) {
   return NRF_WriteRegister(reg, &cfg, 1);
 }
 
-NRF_Status NRF_WritePayload(uint8_t *write, uint8_t length) {
-  return NRF_SendWriteCommand(NRF_CMD_W_TX_PAYLOAD, write, length);
-}
-
 
 /* Reading */
 NRF_Status NRF_ReadRegister(uint8_t reg, uint8_t *read, uint8_t length) {
@@ -174,76 +289,19 @@ uint8_t NRF_ReadStatus() {
   uint8_t status;
   uint8_t cmd = NRF_CMD_NOP;
 
-  NRF_CSN_reset();
+  csn_reset();
   HAL_SPI_TransmitReceive(HSPI, &cmd, &status, 1, NRF_SPI_TIMEOUT);
-  NRF_CSN_set();
+  csn_set();
 
   return status;
 }
 
-NRF_Status NRF_ReadPayload(uint8_t *read, uint8_t length) {
-  return NRF_SendReadCommand(NRF_CMD_R_RX_PAYLOAD, read, length);
-}
-
-NRF_Status NRF_EnterModeTX() {
-  NRF_Status ret = HAL_OK;
-
-  // unset PRIM_RX
-  ret = NRF_ResetRegisterBit(NRF_REG_CONFIG, 0);
-  if(ret != HAL_OK) {
-    return ret;
-  }
-
-  // set PWR_UP
-  ret = NRF_SetRegisterBit(NRF_REG_CONFIG, 1);
-  if(ret != HAL_OK) {
-    return ret;
-  }
-
-  // When in power down mode NRF must settle
-  // for ~1.5ms before entering TX/RX modes
-  HAL_Delay(2);
-  NRF_CE_set();
-
-  // Flush FIFO
-  ret = NRF_SendCommand(NRF_CMD_FLUSH_TX);
-  if(ret != HAL_OK) {
-    return ret;
-  }
-
-  return ret;
-}
-
-NRF_Status NRF_EnterModeRX() {
-  NRF_Status ret = HAL_OK;
-
-  ret = NRF_SetRegisterBit(NRF_REG_CONFIG, 0); // set PRIM_RX
-  if(ret != HAL_OK) {
-    return ret;
-  }
-
-  ret = NRF_SetRegisterBit(NRF_REG_CONFIG, 1); // set PWR_UP
-  if(ret != HAL_OK) {
-    return ret;
-  }
-
-  // When in power down mode NRF must settle
-  // for ~1.5ms before entering TX/RX modes
-  HAL_Delay(2);
-  NRF_CE_set();
-
-  // Flush FIFO
-  ret = NRF_SendCommand(NRF_CMD_FLUSH_RX);
-  if(ret != HAL_OK) {
-    return ret;
-  }
-
-  return ret;
-}
 
 
 /*
- * Misc functions
+ *
+ * Debugging
+ *
  */
 
 NRF_Status NRF_VerifySPI() {
@@ -270,14 +328,27 @@ NRF_Status NRF_VerifySPI() {
 }
 
 void NRF_Reset() {
-  NRF_WriteRegisterByte(NRF_REG_CONFIG,       0x08);
+  // Reset state (goto standby-I)
+  csn_set();
+  ce_reset();
+
+  // Flush FIFOs
+  NRF_EnterMode(NRF_MODE_TX);
+  NRF_SendCommand(NRF_CMD_FLUSH_TX);
+  ce_reset();
+  NRF_EnterMode(NRF_MODE_RX);
+  NRF_SendCommand(NRF_CMD_FLUSH_RX);
+  ce_reset();
+
+  // Flush register
+  NRF_WriteRegisterByte(NRF_REG_CONFIG,       0x0A);
   NRF_WriteRegisterByte(NRF_REG_EN_AA,        0x3f);
   NRF_WriteRegisterByte(NRF_REG_EN_RXADDR,    0x03);
   NRF_WriteRegisterByte(NRF_REG_SETUP_AW,     0x03);
   NRF_WriteRegisterByte(NRF_REG_SETUP_RETR,   0x03);
   NRF_WriteRegisterByte(NRF_REG_RF_CH,        0x02);
   NRF_WriteRegisterByte(NRF_REG_RF_SETUP,     0x0e);
-  NRF_WriteRegisterByte(NRF_REG_STATUS,       0x70); // clear eventual bits
+  NRF_WriteRegisterByte(NRF_REG_STATUS,       0x70); // clear flags
 
   uint8_t address[5] = {0xE7, 0xE7, 0xE7, 0xE7, 0xE7};
   uint8_t address2[5] = {0xC2, 0xC2, 0xC2, 0xC2, 0xC2};
@@ -306,11 +377,11 @@ void NRF_PrintStatus() {
   printf("Status register: %02X\r\n", status);
   printf("CE: %d\r\n", HAL_GPIO_ReadPin(NRF_CE_Port, NRF_CE_Pin));
   printf("CSN: %d\r\n", HAL_GPIO_ReadPin(NRF_CSN_Port, NRF_CSN_Pin));
-  printf("TX_FULL:  %1X\r\n", status & STAT_TX_FULL_BIT);
-  printf("RX_P_NO:  %1X\r\n", (status & STAT_RX_P_NO_BITS)  >> 1);
-  printf("MAX_RT:   %1X\r\n", (status & STAT_MAX_RT_BIT)    >> 4);
-  printf("TX_DS:    %1X\r\n", (status & STAT_TX_DS_BIT)     >> 5);
-  printf("RX_DR:    %1X\r\n", (status & STAT_RX_DR_BIT)     >> 6);
+  printf("TX_FULL:  %1X\r\n", status & (1<<STATUS_BIT_TX_FULL));
+  printf("RX_P_NO:  %1X\r\n", (status & (0x3<<STATUS_BIT_RX_P_NO)) >> 1);
+  printf("MAX_RT:   %1X\r\n", (status & (1<<STATUS_BIT_MAX_RT))    >> 4);
+  printf("TX_DS:    %1X\r\n", (status & (1<<STATUS_BIT_TX_DS))     >> 5);
+  printf("RX_DR:    %1X\r\n", (status & (1<<STATUS_BIT_RX_DR))     >> 6);
   printf("\r\n");
 }
 
@@ -318,10 +389,10 @@ void NRF_PrintFIFOStatus() {
   uint8_t reg = NRF_ReadRegisterByte(NRF_REG_FIFO_STATUS);
 
   printf("FIFO status register: %02X\r\n", reg);
-  printf("RX_EMPTY:   %2X\r\n", reg & FIFO_RX_EMPTY);
-  printf("RX_FULL:    %2X\r\n", (reg & FIFO_RX_FULL)     >> 1);
-  printf("TX_EMPTY:   %2X\r\n", (reg & FIFO_TX_EMPTY)    >> 4);
-  printf("TX_FULL:    %2X\r\n", (reg & FIFO_TX_FULL)     >> 5);
-  printf("TX_REUSE:   %2X\r\n", (reg & FIFO_TX_REUSE)    >> 6);
+  printf("RX_EMPTY:   %2X\r\n", reg &  (1<<FIFO_STATUS_BIT_RX_EMPTY));
+  printf("RX_FULL:    %2X\r\n", (reg & (1<<FIFO_STATUS_BIT_RX_FULL))     >> 1);
+  printf("TX_EMPTY:   %2X\r\n", (reg & (1<<FIFO_STATUS_BIT_TX_EMPTY))    >> 4);
+  printf("TX_FULL:    %2X\r\n", (reg & (1<<FIFO_STATUS_BIT_TX_FULL))     >> 5);
+  printf("TX_REUSE:   %2X\r\n", (reg & (1<<FIFO_STATUS_BIT_TX_REUSE))    >> 6);
   printf("\r\n");
 }

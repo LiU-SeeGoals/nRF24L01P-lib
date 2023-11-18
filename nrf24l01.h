@@ -86,6 +86,21 @@
 
 
 /**
+ * @name Modes
+ * @anchor mode
+ *
+ * Available modes on the device which we easily can reach.
+ *
+ * See figure 3 (page 21) and table 15 (page 23) in @datasheet.
+ */
+//!@{
+#define NRF_MODE_POWERDOWN  0x0
+#define NRF_MODE_STANDBY1   0x1
+#define NRF_MODE_RX         0x2
+#define NRF_MODE_TX         0x3
+//!@}
+
+/**
  * \brief Currently we're just copying HAL's status.
  * @anchor NRF_Status
  */
@@ -101,180 +116,280 @@ typedef HAL_StatusTypeDef NRF_Status;
  * with the device.
  */
 //!@{
-/**
- * \brief Initalises the library and make the device enter standby-I mode.
- *
- * \param handle A pointer at the SPI_HandleTypeDef which HAL creates for the
- *          SPI communication.
- * \param PortCSN A pointer at the GPIO_TypeDef for the port that the device CSN
- *          pin is on.
- * \param PinCSN The pin that the devices CSN is connected to.
- * \param PortCE A pointer at the GPIO_TypeDef far the port that the device CE
- *          pin is on.
- * \param PinCE The pin that the devices CE is connected to.
- * \return NRF_Status
- */
-NRF_Status NRF_Init(SPI_HandleTypeDef *handle,
-                    GPIO_TypeDef *PortCSN,
-                    uint16_t PinCSN,
-                    GPIO_TypeDef *PortCE,
-                    uint16_t PinCE);
+  /**
+   * @anchor init
+   * \brief Initalises the library and make the device enter standby-I mode.
+   * \note Is expected to be the first interaction with the device after powerup.
+   *
+   * \param handle A pointer at the SPI_HandleTypeDef which HAL creates for the
+   *          SPI communication.
+   * \param PortCSN A pointer at the GPIO_TypeDef for the port that the device CSN
+   *          pin is on.
+   * \param PinCSN The pin that the devices CSN is connected to.
+   * \param PortCE A pointer at the GPIO_TypeDef far the port that the device CE
+   *          pin is on.
+   * \param PinCE The pin that the devices CE is connected to.
+   * \return NRF_Status
+   */
+  NRF_Status NRF_Init(SPI_HandleTypeDef *handle,
+                      GPIO_TypeDef *PortCSN,
+                      uint16_t PinCSN,
+                      GPIO_TypeDef *PortCE,
+                      uint16_t PinCE);
 
-/**
- * \brief Sends a @ref command to the device.
- *
- * \param cmd A @ref command.
- * \return NRF_Status
- */
-NRF_Status NRF_SendCommand(uint8_t cmd);
+  /**
+   * \brief Sends a @ref command to the device.
+   *
+   * \param cmd A @ref command.
+   * \return NRF_Status
+   */
+  NRF_Status NRF_SendCommand(uint8_t cmd);
 
-/**
- * \brief Sends a write @ref command to the device along with
- * a buffer to write.
- *
- * \param cmd A write @ref command.
- * \param write Buffer to write.
- * \param length Length of buffer.
- * \return NRF_Status
- */
-NRF_Status NRF_SendWriteCommand(uint8_t cmd, uint8_t *write, uint8_t length);
+  /**
+   * \brief Sends a write @ref command to the device along with
+   * a buffer to write.
+   *
+   * \param cmd A write @ref command.
+   * \param write Buffer to write.
+   * \param length Length of buffer.
+   * \return NRF_Status
+   */
+  NRF_Status NRF_SendWriteCommand(uint8_t cmd, uint8_t *write, uint8_t length);
 
-/**
- * \brief Sends a read @ref command to the device along with
- * a buffer to read to.
- *
- * \param cmd A read @ref command.
- * \param write Buffer to read to.
- * \param length Length of buffer.
- * \return NRF_Status
- */
-NRF_Status NRF_SendReadCommand(uint8_t cmd, uint8_t *read, uint8_t length);
-
-void NRF_CSN_set();
-void NRF_CSN_reset();
-void NRF_CE_set();
-void NRF_CE_reset();
+  /**
+   * \brief Sends a read @ref command to the device along with
+   * a buffer to read to.
+   *
+   * \param cmd A read @ref command.
+   * \param write Buffer to read to.
+   * \param length Length of buffer.
+   * \return NRF_Status
+   */
+  NRF_Status NRF_SendReadCommand(uint8_t cmd, uint8_t *read, uint8_t length);
 //!@}
 
 
 /**
- * @name Helper
- * @anchor helpers
+ * @name Device control
  *
- * These functions are built with the help of the @ref main functions
- * to make interfacing with the device nicer.
+ * These functions are used to control the device and
+ * transmit/recieve data.
+ *
  */
 //!@{
+  /**
+   * \brief Enter a specific @ref mode. See details.
+   * \warning We're not doing any handholding. Please look at figure 3
+   * page 21 in @datasheet to see what transitions make sense. And table 15
+   * on page 23 for what register values means which mode.
+   *
+   * \note The device is in Standby-I from running @ref init.
+   * \note If you enter TX mode you'll end up in Standby-II mode
+   * unless you reset CE pin manually. Use @ref transmit function
+   * if you only want to send one packet.
+   *
+   * Expected transitions: \n 
+   * Any -> Powerdown \n 
+   * Powerdown -> Standby-I \n 
+   * Standby-I > RX/TX \n 
+   *
+   * \param mode A @ref mode.
+   * \return NRF_Status
+   */
+  NRF_Status NRF_EnterMode(uint8_t mode);
 
-/**
- * \brief Write a buffer to a @ref register.
- *
- * \param reg One of the available @ref registers.
- * \param write A pointer to the buffer to write.
- * \param length The length of the buffer.
- * \return NRF_Status
- */
-NRF_Status NRF_WriteRegister(uint8_t reg, uint8_t *write, uint8_t length);
+  /**
+   * \brief Write payload (1-32 bytes).
+   *
+   * \param payload Buffer with payload.
+   * \param length Length of buffer.
+   * \return NRF_Status
+   */
+  NRF_Status NRF_WritePayload(uint8_t *payload, uint8_t length);
 
-/**
- * \brief Write a byte to a @ref register.
- *
- * \param reg A @ref register.
- * \param byte The byte to write to the register.
- * \return NRF_Status
- */
-NRF_Status NRF_WriteRegisterByte(uint8_t reg, uint8_t byte);
+  /**
+   * \brief Read payload (1-32 bytes).
+   *
+   * \param payload Buffer with payload.
+   * \param length Length of buffer.
+   * \return NRF_Status
+   */
+  NRF_Status NRF_ReadPayload(uint8_t *payload, uint8_t length);
 
-/**
- * \brief Set a bit to 1 in a @ref register.
- *
- * \param reg A @ref register.
- * \param bit A particular bit within the register.
- * \return NRF_Status
- */
-NRF_Status NRF_SetRegisterBit(uint8_t reg, uint8_t bit);
+  /**
+   * @anchor transmit
+   * \brief Transmit the specified payload from standby-I mode.
+   *
+   * \note Expects device to be in standby-I mode (which it should enter from
+   * @ref init) and be configured as transmitter (PRIM_RX is 0 in CONFIG
+   * register, default).
+   *
+   * \param payload Buffer with payload.
+   * \param length Length of buffer.
+   * \return HAL_OK on success, HAL_ERROR else.
+   */
+  NRF_Status NRF_Transmit(uint8_t *payload, uint8_t length);
 
-/**
- * \brief Set a bit to 0 in a @ref register.
- *
- * \param reg A @ref register.
- * \param bit A particular bit within the register.
- * \return NRF_Status
- */
-NRF_Status NRF_ResetRegisterBit(uint8_t reg, uint8_t bit);
-
-NRF_Status NRF_WritePayload(uint8_t *payload, uint8_t length);
-
-/**
- * \brief Read a register to a buffer.
- *
- * \param reg A @ref register.
- * \param read A pointer to the buffer to read to.
- * \param length The length of the buffer.
- * \return NRF_Status
- */
-NRF_Status NRF_ReadRegister(uint8_t reg, uint8_t *read, uint8_t length);
-
-/**
- * \brief Read a byte from a register.
- *
- * \param reg A @ref register.
- * \return The byte in the register.
- */
-uint8_t NRF_ReadRegisterByte(uint8_t reg);
-
-/**
- * \brief Read status by issuing a NOP.
- *
- * More efficient since only a single SPI transmit/recieve is issued.
- *
- * \return The status register byte.
- */
-uint8_t NRF_ReadStatus();
-
-NRF_Status NRF_ReadPayload(uint8_t *payload, uint8_t length);
-
-/**
- * \brief Make the device enter TX mode.
- */
-NRF_Status NRF_EnterModeTX();
-
-/**
- * \brief Make the device enter RX mode.
- */
-NRF_Status NRF_EnterModeRX();
+  /**
+   * \brief Transmit the specified payload from standby-I mode and wait for
+   * an ACK or max retries. Usually this is handled through interrupts.
+   *
+   * \note Expects device to be in standby-I mode (which it should enter from
+   * @ref init) and be configured as transmitter (PRIM_RX is 0 in CONFIG
+   * register, default).
+   *
+   * \param payload Buffer with payload.
+   * \param length Length of buffer.
+   * \return HAL_OK on success, HAL_ERROR else.
+   */
+  NRF_Status NRF_TransmitAndWait(uint8_t *payload, uint8_t length);
 //!@}
 
+
 /**
- * @name Misc
- * @anchor misc
+ * @name Advanced device control
+ *
+ * These functions require you to enable certain features on the device
+ * for them to work
+ *
+ */
+//!@{
+  /**
+   * \brief Write payload that tells receiver to not send an ACK as response,
+   * see section 7.4.2.3 on page 29 in @datasheet for details.
+   *
+   * \param payload Buffer with payload.
+   * \param length Length of buffer.
+   * \return NRF_Status
+   */
+  NRF_Status NRF_WritePayloadNoAck(uint8_t *payload, uint8_t length);
+
+  /**
+   * \brief Write payload to send from the receiver in the ACK package (1-32 bytes).
+   * See details in section 7.5.1 on page 31 in @datasheet.
+   *
+   * \param payload Buffer with payload.
+   * \param length Length of buffer.
+   * \return NRF_Status
+   */
+  NRF_Status NRF_WriteAckPayload(uint8_t *payload, uint8_t length);
+//!@}
+
+
+/**
+ * @name Register helpers
+ * @anchor helpers
+ *
+ * These are abstracted functions to make working with
+ * registers nicer.
+ *
+ */
+//!@{
+  /**
+   * \brief Write buffer to @ref register.
+   *
+   * \param reg One of the available @ref registers.
+   * \param write A pointer to the buffer to write.
+   * \param length The length of the buffer.
+   * \return NRF_Status
+   */
+  NRF_Status NRF_WriteRegister(uint8_t reg, uint8_t *write, uint8_t length);
+
+  /**
+   * \brief Write byte to @ref register.
+   *
+   * \param reg A @ref register.
+   * \param byte The byte to write to the register.
+   * \return NRF_Status
+   */
+  NRF_Status NRF_WriteRegisterByte(uint8_t reg, uint8_t byte);
+
+  /**
+   * \brief Set bit to 1 in @ref register.
+   *
+   * \param reg A @ref register.
+   * \param bit A particular bit within the register.
+   * \return NRF_Status
+   */
+  NRF_Status NRF_SetRegisterBit(uint8_t reg, uint8_t bit);
+
+  /**
+   * \brief Set bit to 0 in @ref register.
+   *
+   * \param reg A @ref register.
+   * \param bit A particular bit within the register.
+   * \return NRF_Status
+   */
+  NRF_Status NRF_ResetRegisterBit(uint8_t reg, uint8_t bit);
+
+  /**
+   * \brief Read register to buffer.
+   *
+   * \param reg A @ref register.
+   * \param read A pointer to the buffer to read to.
+   * \param length The length of the buffer.
+   * \return NRF_Status
+   */
+  NRF_Status NRF_ReadRegister(uint8_t reg, uint8_t *read, uint8_t length);
+
+  /**
+   * \brief Read byte from register.
+   *
+   * \param reg A @ref register.
+   * \return The byte in the register.
+   */
+  uint8_t NRF_ReadRegisterByte(uint8_t reg);
+
+  /**
+   * \brief Read status by issuing a NOP.
+   *
+   * More efficient since only a single SPI transmit/recieve is issued.
+   *
+   * \return The status register byte.
+   */
+  uint8_t NRF_ReadStatus();
+//!@}
+
+
+/**
+ * @name Debugging
+ * @anchor debugging
  *
  * These can be useful for debugging.
  */
 //!@{
+  /**
+   * \brief Verifies that SPI communication with the device works.
+   *
+   * We write a predetermined value to the TX_ADDR @ref register.
+   * Then we read the value of the register.
+   * If the two values are the same then SPI is working.
+   *
+   * \return HAL_OK on success.
+   */
+  NRF_Status NRF_VerifySPI();
 
-/**
- * \brief Verifies that SPI communication with the device works.
- *
- * We write a predetermined value to the TX_ADDR @ref register.
- * Then we read the value of the register.
- * If the two values are the same then SPI is working.
- *
- * \return HAL_OK on success.
- */
-NRF_Status NRF_VerifySPI();
+  /**
+   * \brief Reset all registers/FIFOs to initial values
+   * specified in @datasheet table 27 on page 59.
+   *
+   * \note The device is expected to enter in Standby-I mode
+   * and will leave in Standby-I mode.
+   *
+   * This is pretty overkill but useful for testing since the device
+   * doesn't reset all registers on a fast enough off-on power switch.
+   */
+  void NRF_Reset();
 
-/**
- * \brief Reset all registers to reset values
- * specified in @datasheet table 27 on page 59.
- *
- * This is pretty overkill but useful for testing since the device
- * doesn't reset on a fast enough off-on power switch.
- */
-void NRF_Reset();
+  /**
+   * \brief printf:s the bits from the status register.
+   */
+  void NRF_PrintStatus();
 
-void NRF_PrintStatus();
-void NRF_PrintFIFOStatus();
+  /**
+   * \brief printf:s the bits from the FIFO status register.
+   */
+  void NRF_PrintFIFOStatus();
 //!@}
 
 #endif /* NRF24L01_H */
