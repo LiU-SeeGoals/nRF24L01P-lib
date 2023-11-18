@@ -4,3 +4,4 @@ latex/
 .settings
 .mxproject
 .project
+.cache/
