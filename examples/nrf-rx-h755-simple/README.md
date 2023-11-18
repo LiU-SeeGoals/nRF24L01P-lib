@@ -1,7 +1,7 @@
 # nrf-rx-h755-simple
 Minimal example for a receiver using an [NUCLEO-H755ZI-Q](https://www.st.com/resource/en/user_manual/um2408-stm32h7-nucleo144-boards-mb1363-stmicroelectronics.pdf).  
 
-When the board start ups it recieves messages forever and prints the received payload on UART (115200 baud rate).
+When the board start ups it recieves messages forever and prints the received payload on UART (115200 baud rate). Send the messages from the [simple transmitter](https://github.com/LiU-SeeGoals/nRF24L01P-lib/tree/main/examples/nrf-tx-h563-simple).
 
 If the user button (blue) is pressed the status and FIFO status registers will be printed.
 
@@ -28,3 +28,6 @@ SPI1 is used in Full-Duplex Master mode. You'll have to change Data Size to 8 Bi
 
 ### USART3
 Asynchronous mode.
+
+### User button
+We only activate an interrupt on the user button pin.

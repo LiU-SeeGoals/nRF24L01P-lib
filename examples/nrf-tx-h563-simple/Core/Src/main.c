@@ -80,11 +80,13 @@ PUTCHAR_PROTOTYPE
 // This is ran when user button is pressed
 void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin) {
   if (GPIO_Pin == BTN_USER_Pin) {
+    NRF_PrintStatus();
+
     printf("Sending data...\r\n");
+
     uint8_t msg[10] = "HelloWorld";
     NRF_Status ret = NRF_TransmitAndWait(msg, 10);
     if (ret != HAL_OK) {
-      // TODO: More thorough error checking here
       printf("Couldn't send data...\r\n");
     } else {
       printf("Data sent...\r\n");

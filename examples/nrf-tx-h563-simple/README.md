@@ -1,7 +1,7 @@
 # nrf-tx-h563-simple
 Simple example for a transmitter using an [NUCLEO-H563ZI](https://www.st.com/resource/en/user_manual/um3115-stm32h5-nucleo144-board-mb1404-stmicroelectronics.pdf).
 
-Press the user button (blue) to send a message, the other simple receiver example can handle receiving it.
+Press the user button (blue) to send a message, the [simple receiver](https://github.com/LiU-SeeGoals/nRF24L01P-lib/tree/main/examples/nrf-rx-h755-simple) can handle receiving it.
 
 It prints info on UART (115200 baud rate).
 
@@ -28,4 +28,4 @@ SPI1 is used in Full-Duplex Master mode. You'll have to change Data Size to 8 Bi
 Asynchronous mode.
 
 ### User button
-We only activate an interrupt on the user button pin.
+We catch an interrupt when the user button is pressed.
