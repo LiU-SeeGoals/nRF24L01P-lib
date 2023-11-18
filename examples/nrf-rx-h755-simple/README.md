@@ -30,4 +30,4 @@ SPI1 is used in Full-Duplex Master mode. You'll have to change Data Size to 8 Bi
 Asynchronous mode.
 
 ### User button
-We only activate an interrupt on the user button pin.
+We catch an interrupt when the user button is pressed.
