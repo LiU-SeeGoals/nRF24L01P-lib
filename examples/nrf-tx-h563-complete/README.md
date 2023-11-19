@@ -1,7 +1,7 @@
 # nrf-tx-h563-complete
 A more complete example for the usage of the library with an [NUCLEO-H563ZI](https://www.st.com/resource/en/user_manual/um3115-stm32h5-nucleo144-board-mb1404-stmicroelectronics.pdf).  
 
-All code of interest is within `/* USER CODE BEGIN 0 */`, generally all other code is generated from STM32CubeMX. You can use the provided .ioc file to generate it.
+All code of interest is within `/* USER CODE BEGIN 0 */` inside of `main.c`, generally all other code is generated from STM32CubeMX. You can use the provided .ioc file to generate it.
 
 ## Pins
 | Zio pin (CN7) | MCU pin | STM32 function | NRF pin | Label     |
