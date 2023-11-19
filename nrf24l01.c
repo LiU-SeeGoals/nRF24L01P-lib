@@ -29,6 +29,7 @@ GPIO_TypeDef *NRF_CSN_Port;
 uint16_t NRF_CSN_Pin;
 GPIO_TypeDef *NRF_CE_Port;
 uint16_t NRF_CE_Pin;
+uint32_t CPU_Freq = 0x00;
 
 
 /*
@@ -59,6 +60,14 @@ uint8_t read_ce() {
   return HAL_GPIO_ReadPin(NRF_CE_Port, NRF_CE_Pin);
 }
 
+void wait(uint64_t us) {
+  uint32_t cycles = CPU_Freq * us * pow(10, -6);
+  uint32_t current = 0;
+  do {
+    current++;
+  } while (current <= cycles);
+}
+
 
 /*
  *
@@ -72,6 +81,11 @@ NRF_Status NRF_Init(SPI_HandleTypeDef *handle, GPIO_TypeDef *PortCSN, uint16_t P
   NRF_CSN_Pin = PinCSN;
   NRF_CE_Port = PortCE;
   NRF_CE_Pin = PinCE;
+
+  CPU_Freq = HAL_RCC_GetSysClockFreq();
+  if (CPU_Freq == 0x00) {
+    return NRF_ERROR;
+  }
 
   // Make sure CSN i pulled high
   csn_set();
@@ -151,7 +165,7 @@ NRF_Status NRF_EnterMode(uint8_t mode) {
       // We expect to come from powerdown
       ce_reset();
       ret = NRF_SetRegisterBit(NRF_REG_CONFIG, CFG_BIT_PWR_UP);
-      HAL_Delay(2);
+      wait(15000);
     case NRF_MODE_RX:
     case NRF_MODE_TX:
       // We expect to come from standby-I
@@ -188,7 +202,7 @@ NRF_Status NRF_Transmit(uint8_t *payload, uint8_t length) {
   }
 
   ce_set();
-  HAL_Delay(1);
+  wait(10);
   ce_reset();
 
   return ret;
