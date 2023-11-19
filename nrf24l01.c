@@ -229,8 +229,8 @@ NRF_Status NRF_WritePayloadNoAck(uint8_t *payload, uint8_t length) {
   return NRF_SendWriteCommand(NRF_CMD_W_TX_PAYLOAD_NO_ACK, payload, length);
 }
 
-NRF_Status NRF_WriteAckPayload(uint8_t *payload, uint8_t length) {
-  return NRF_SendWriteCommand(NRF_CMD_W_ACK_PAYLOAD, payload, length);
+NRF_Status NRF_WriteAckPayload(uint8_t pipe, uint8_t *payload, uint8_t length) {
+  return NRF_SendWriteCommand(NRF_CMD_W_ACK_PAYLOAD | pipe, payload, length);
 }
 
 

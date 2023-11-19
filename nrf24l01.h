@@ -272,14 +272,16 @@ typedef enum
   NRF_Status NRF_WritePayloadNoAck(uint8_t *payload, uint8_t length);
 
   /**
-   * \brief Write payload to send from the receiver in the ACK package (1-32 bytes).
+   * \brief Write payload (1-32 bytes) to send from the receiver to the
+   * transmitter in the next ACK package (1-32 bytes) for specified pipe.
    * See details in section 7.5.1 on page 31 in @datasheet.
    *
+   * \param pipe The pipe to 
    * \param payload Buffer with payload.
    * \param length Length of buffer.
    * \return NRF_Status
    */
-  NRF_Status NRF_WriteAckPayload(uint8_t *payload, uint8_t length);
+  NRF_Status NRF_WriteAckPayload(uint8_t pipe, uint8_t *payload, uint8_t length);
 //!@}
 
 
