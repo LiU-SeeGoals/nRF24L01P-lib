@@ -79,18 +79,16 @@ NRF_Status NRF_Init(SPI_HandleTypeDef *handle, GPIO_TypeDef *PortCSN, uint16_t P
   // Takes ~100ms from power on to start up
   HAL_Delay(100);
 
-  NRF_EnterMode(NRF_MODE_STANDBY1);
-
-  return HAL_OK;
+  return NRF_EnterMode(NRF_MODE_STANDBY1);
 }
 
 NRF_Status NRF_SendCommand(uint8_t cmd) {
-  NRF_Status ret = HAL_OK;
+  NRF_Status ret = NRF_OK;
   uint8_t status;
 
   csn_reset();
-  ret = HAL_SPI_TransmitReceive(HSPI, &cmd, &status, 1, NRF_SPI_TIMEOUT);
-  if (ret != HAL_OK) {
+  ret = (NRF_Status)HAL_SPI_TransmitReceive(HSPI, &cmd, &status, 1, NRF_SPI_TIMEOUT_DUR);
+  if (ret != NRF_OK) {
     return ret;
   }
   csn_set();
@@ -99,16 +97,16 @@ NRF_Status NRF_SendCommand(uint8_t cmd) {
 }
 
 NRF_Status NRF_SendWriteCommand(uint8_t cmd, uint8_t *write, uint8_t length) {
-  NRF_Status ret = HAL_OK;
+  NRF_Status ret = NRF_OK;
   uint8_t status;
 
   csn_reset();
-  ret = HAL_SPI_TransmitReceive(HSPI, &cmd, &status, 1, NRF_SPI_TIMEOUT);
-  if (ret != HAL_OK) {
+  ret = (NRF_Status)HAL_SPI_TransmitReceive(HSPI, &cmd, &status, 1, NRF_SPI_TIMEOUT_DUR);
+  if (ret != NRF_OK) {
     return ret;
   }
-  ret = HAL_SPI_Transmit(HSPI, write, length, NRF_SPI_TIMEOUT);
-  if (ret != HAL_OK) {
+  ret = (NRF_Status)HAL_SPI_Transmit(HSPI, write, length, NRF_SPI_TIMEOUT_DUR);
+  if (ret != NRF_OK) {
     return ret;
   }
   csn_set();
@@ -117,16 +115,16 @@ NRF_Status NRF_SendWriteCommand(uint8_t cmd, uint8_t *write, uint8_t length) {
 }
 
 NRF_Status NRF_SendReadCommand(uint8_t cmd, uint8_t *read, uint8_t length) {
-  NRF_Status ret = HAL_OK;
+  NRF_Status ret = NRF_OK;
   uint8_t status;
 
   csn_reset();
-  ret = HAL_SPI_TransmitReceive(HSPI, &cmd, &status, 1, NRF_SPI_TIMEOUT);
-  if(ret != HAL_OK) {
+  ret = (NRF_Status)HAL_SPI_TransmitReceive(HSPI, &cmd, &status, 1, NRF_SPI_TIMEOUT_DUR);
+  if(ret != NRF_OK) {
     return ret;
   }
-  ret = HAL_SPI_Receive(HSPI, read, length, NRF_SPI_TIMEOUT);
-  if(ret != HAL_OK) {
+  ret = (NRF_Status)HAL_SPI_Receive(HSPI, read, length, NRF_SPI_TIMEOUT_DUR);
+  if(ret != NRF_OK) {
     return ret;
   }
   csn_set();
@@ -143,7 +141,7 @@ NRF_Status NRF_SendReadCommand(uint8_t cmd, uint8_t *read, uint8_t length) {
  */
 
 NRF_Status NRF_EnterMode(uint8_t mode) {
-  NRF_Status ret = HAL_OK;
+  NRF_Status ret = NRF_OK;
 
   switch(mode) {
     case NRF_MODE_POWERDOWN:
@@ -167,7 +165,7 @@ NRF_Status NRF_EnterMode(uint8_t mode) {
       ce_set();
       break;
     default:
-      ret = HAL_ERROR;
+      ret = NRF_ERROR;
       break;
   }
 
@@ -183,9 +181,9 @@ NRF_Status NRF_ReadPayload(uint8_t *read, uint8_t length) {
 }
 
 NRF_Status NRF_Transmit(uint8_t *payload, uint8_t length) {
-  NRF_Status ret = HAL_OK;
+  NRF_Status ret = NRF_OK;
   ret = NRF_WritePayload(payload, length);
-  if(ret != HAL_OK) {
+  if(ret != NRF_OK) {
     return ret;
   }
 
@@ -197,13 +195,17 @@ NRF_Status NRF_Transmit(uint8_t *payload, uint8_t length) {
 }
 
 NRF_Status NRF_TransmitAndWait(uint8_t *payload, uint8_t length) {
-  NRF_Status ret = HAL_OK;
+  NRF_Status ret = NRF_OK;
+
   ret = NRF_WritePayload(payload, length);
-  if(ret != HAL_OK) {
+  if(ret != NRF_OK) {
     return ret;
   }
 
+  // Transmit
   ce_set();
+
+  // Wait for status update
   uint8_t status;
   for(;;) {
     status = NRF_ReadStatus();
@@ -212,9 +214,9 @@ NRF_Status NRF_TransmitAndWait(uint8_t *payload, uint8_t length) {
       ret = NRF_SetRegisterBit(NRF_REG_STATUS, STATUS_BIT_TX_DS); // clear flag
       break;
     } else if (status & (1<<STATUS_BIT_MAX_RT)) {
-      // Max retransmits reached.
+      // Max retransmits reached
       NRF_SetRegisterBit(NRF_REG_STATUS, STATUS_BIT_MAX_RT); // clear flag
-      ret = HAL_ERROR;
+      ret = NRF_MAX_RT;
       break;
     }
   }
@@ -250,25 +252,27 @@ NRF_Status NRF_WriteRegisterByte(uint8_t reg, uint8_t byte) {
 }
 
 NRF_Status NRF_SetRegisterBit(uint8_t reg, uint8_t bit) {
-  NRF_Status ret = HAL_OK;
+  NRF_Status ret = NRF_OK;
   uint8_t cfg = 0x00;
 
   ret = NRF_ReadRegister(reg, &cfg, 1);
-  if (ret != HAL_OK) {
+  if (ret != NRF_OK) {
     return ret;
   }
+
   cfg = cfg | (1 << bit);
   return NRF_WriteRegister(reg, &cfg, 1);
 }
 
 NRF_Status NRF_ResetRegisterBit(uint8_t reg, uint8_t bit) {
-  NRF_Status ret = HAL_OK;
+  NRF_Status ret = NRF_OK;
   uint8_t cfg = 0x00;
 
   ret = NRF_ReadRegister(reg, &cfg, 1);
-  if (ret != HAL_OK) {
+  if (ret != NRF_OK) {
     return ret;
   }
+
   cfg = cfg & ~(1 << bit);
   return NRF_WriteRegister(reg, &cfg, 1);
 }
@@ -286,11 +290,11 @@ uint8_t NRF_ReadRegisterByte(uint8_t reg) {
 }
 
 uint8_t NRF_ReadStatus() {
-  uint8_t status;
+  uint8_t status = 0x00;
   uint8_t cmd = NRF_CMD_NOP;
 
   csn_reset();
-  HAL_SPI_TransmitReceive(HSPI, &cmd, &status, 1, NRF_SPI_TIMEOUT);
+  HAL_SPI_TransmitReceive(HSPI, &cmd, &status, 1, NRF_SPI_TIMEOUT_DUR);
   csn_set();
 
   return status;
@@ -305,22 +309,22 @@ uint8_t NRF_ReadStatus() {
  */
 
 NRF_Status NRF_VerifySPI() {
-  NRF_Status ret = HAL_OK;
+  NRF_Status ret = NRF_OK;
   uint8_t write[5] = "0x57!";
   uint8_t read[5];
 
   ret = NRF_WriteRegister(NRF_REG_TX_ADDR, write, 5);
-  if (ret != HAL_OK) {
+  if (ret != NRF_OK) {
     return ret;
   }
   ret = NRF_ReadRegister(NRF_REG_TX_ADDR, read, 5);
-  if (ret != HAL_OK) {
+  if (ret != NRF_OK) {
     return ret;
   }
 
   for(int i = 0; i < 5; i++) {
     if (write[i] != read[i]) {
-      return HAL_ERROR;
+      return NRF_SPI_ERROR;
     }
   }
 

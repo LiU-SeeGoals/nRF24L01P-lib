@@ -1,6 +1,8 @@
 # nrf-rx-h755-complete
 A more complete example for the usage of the library with an [NUCLEO-H755ZI-Q](https://www.st.com/resource/en/user_manual/um2408-stm32h7-nucleo144-boards-mb1363-stmicroelectronics.pdf).  
 
+All code of interest is within `/* USER CODE BEGIN 0 */`, generally all other code is generated from STM32CubeMX. You can use the provided .ioc file to generate it.
+
 ## Pins
 | Zio pin (CN7) | MCU pin | STM32 function | NRF pin | Label     |
 |---------------|---------|----------------|---------|-----------|

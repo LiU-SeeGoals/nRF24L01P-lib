@@ -63,7 +63,12 @@ static void MX_USART3_UART_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-/**** TO GET PRINTF TO OUTPUT TO USART3 *****/
+/**************************************
+ *           EXAMPLE CODE BEGIN
+ **************************************/
+
+// BEGIN REDIRECT
+// This is used to redirect printf to UART
 #ifdef __GNUC__
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
 #else
@@ -75,33 +80,22 @@ PUTCHAR_PROTOTYPE
   HAL_UART_Transmit(&huart3, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
   return ch;
 }
-/*******************************************/
+// END REDIRECT
 
+// We've configured the user button to interrupt on rising edge
 void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin) {
-  printf("Interrupt\r\n");
   switch (GPIO_Pin) {
     case BTN_USER_Pin:
-      {
-        NRF_PrintStatus();
-        NRF_PrintFIFOStatus();
-        if (!(NRF_ReadRegisterByte(NRF_REG_FIFO_STATUS) & 0x01)) {
-          uint8_t payload[10];
-          NRF_ReadPayload(payload, 10);
-          printf("ACK Payload:");
-          for (int i = 0; i < 10; i++) {
-            printf("%c", payload[i]);
-          }
-          printf("\r\n");
-        }
-        count++;
-      }
+      NRF_PrintStatus();
+      NRF_PrintFIFOStatus();
       break;
     default:
-      printf("Unhandled interrupt...\r\n");
+      printf("Unhandled rising interrupt...\r\n");
       break;
   }
 }
 
+// We've configured the NRF to interrupt on falling edge
 void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin) {
   switch (GPIO_Pin) {
     case NRF_IRQ_Pin:
@@ -130,18 +124,28 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin) {
             printf("%c", payload[i]);
           }
           printf("\r\n");
+          count++;
+          if (count=='z') {
+            count = 'a';
+          }
         }
       }
       break;
     default:
-      printf("Unhandled interrupt...\r\n");
+      printf("Unhandled falling interrupt...\r\n");
       break;
   }
 }
 
 void runExample() {
-  printf("... starting up H5\r\n\r\n");
-  NRF_Init(&hspi1, NRF_CSN_GPIO_Port, NRF_CSN_Pin, NRF_CE_GPIO_Port, NRF_CE_Pin);
+  printf("\r\nStarting up complete TX H5...\r\n");
+
+  // Initialise the library and make the device enter standby-I mode
+  if(NRF_Init(&hspi1, NRF_CSN_GPIO_Port, NRF_CSN_Pin, NRF_CE_GPIO_Port, NRF_CE_Pin) != NRF_OK) {
+    printf("Couldn't initialise device, are pins correctly connected?\r\n");
+    Error_Handler();
+  }
+
   NRF_Reset();
 
   // Config
@@ -153,7 +157,18 @@ void runExample() {
   NRF_SetRegisterBit(NRF_REG_FEATURE, 1);
   NRF_SetRegisterBit(NRF_REG_FEATURE, 2);
   NRF_SetRegisterBit(NRF_REG_DYNPD, 0);
+
+  for(;;) {
+    uint8_t msg[10] = {count};
+    NRF_Transmit(msg, 10);
+    HAL_Delay(1000);
+  }
 }
+
+/**************************************
+ *           EXAMPLE CODE END
+ **************************************/
+
 /* USER CODE END 0 */
 
 /**
@@ -195,9 +210,6 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    uint8_t msg[10] = {count};
-    NRF_Transmit(msg, 10);
-    HAL_Delay(4000);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

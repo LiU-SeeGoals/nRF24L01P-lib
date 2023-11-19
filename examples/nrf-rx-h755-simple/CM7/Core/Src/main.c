@@ -66,7 +66,12 @@ static void MX_USART3_UART_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-/**** TO GET PRINTF TO OUTPUT TO USART3 *****/
+/**************************************
+ *           EXAMPLE CODE BEGIN
+ **************************************/
+
+// BEGIN REDIRECT
+// This is used to redirect printf to UART
 #ifdef __GNUC__
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
 #else
@@ -78,8 +83,9 @@ PUTCHAR_PROTOTYPE
   HAL_UART_Transmit(&huart3, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
   return ch;
 }
-/*******************************************/
+// END REDIRECT
 
+// This is ran when user button is pressed
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
   if (GPIO_Pin == BTN_USER_Pin) {
     NRF_PrintStatus();
@@ -87,11 +93,15 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
   }
 }
 
+// Configure the device and wait for packages forever.
 void runExample() {
-  printf("Starting up simple receiver H7...\r\n\r\n");
+  printf("\r\nStarting up simple RX H7...\r\n");
 
   // Initialise the library and make the device enter standby-I mode
-  NRF_Init(&hspi1, NRF_CSN_GPIO_Port, NRF_CSN_Pin, NRF_CE_GPIO_Port, NRF_CE_Pin);
+  if(NRF_Init(&hspi1, NRF_CSN_GPIO_Port, NRF_CSN_Pin, NRF_CE_GPIO_Port, NRF_CE_Pin) != NRF_OK) {
+    printf("Couldn't initialise device, are pins correctly connected?\r\n");
+    Error_Handler();
+  }
 
   // Resets all registers but keeps the device in standby-I mode
   NRF_Reset();
@@ -106,7 +116,7 @@ void runExample() {
   // Enter RX mode
   NRF_EnterMode(NRF_MODE_RX);
 
-  // wait for data
+  // Wait for data
   uint8_t payload[10];
   uint8_t STATUS_REGISTER_RX_DR_BIT = 6;
   uint8_t status;
@@ -122,11 +132,16 @@ void runExample() {
       }
       printf("\r\n");
 
-      // reset RX_DR
+      // Reset RX_DR
       NRF_SetRegisterBit(NRF_REG_STATUS, 6);
     }
   }
 }
+
+/**************************************
+ *           EXAMPLE CODE END
+ **************************************/
+
 /* USER CODE END 0 */
 
 /**

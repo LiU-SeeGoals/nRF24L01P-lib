@@ -51,7 +51,7 @@ SPI_HandleTypeDef hspi1;
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
-
+uint8_t count = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -66,7 +66,12 @@ static void MX_USART3_UART_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-/**** TO GET PRINTF TO OUTPUT TO USART3 *****/
+/**************************************
+ *           EXAMPLE CODE BEGIN
+ **************************************/
+
+// BEGIN REDIRECT
+// This is used to redirect printf to UART
 #ifdef __GNUC__
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
 #else
@@ -78,7 +83,7 @@ PUTCHAR_PROTOTYPE
   HAL_UART_Transmit(&huart3, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
   return ch;
 }
-/*******************************************/
+// END REDIRECT
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
   switch(GPIO_Pin) {
@@ -91,6 +96,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
         uint8_t status = NRF_ReadStatus();
         if (status & 0x40) {
           // RX_DR (Data Ready RX FIFO interrupt) set
+
+          // Read the data
           uint8_t payload[10];
           NRF_ReadPayload(payload, 10);
           printf("Payload:");
@@ -98,7 +105,20 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
             printf("%c", payload[i]);
           }
           printf("\r\n");
-          NRF_SetRegisterBit(NRF_REG_STATUS, 6); // reset RX_DR
+
+          // Reset RX_DR
+          NRF_SetRegisterBit(NRF_REG_STATUS, 6);
+
+          // If we've received two messages, send
+          // something back next time
+          if (count == 3) {
+            // Write the payload to send with the ACK
+            uint8_t msg[10] = "HelloThere";
+            NRF_WriteAckPayload(msg, 10);
+            count = 0;
+          }
+
+          count++;
         }
       }
       break;
@@ -109,8 +129,15 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 }
 
 void runExample() {
-  printf("... starting up H7\r\n\r\n");
-  NRF_Init(&hspi1, NRF_CSN_GPIO_Port, NRF_CSN_Pin, NRF_CE_GPIO_Port, NRF_CE_Pin);
+  printf("\r\nStarting up complete RX H7...\r\n");
+
+  // Initialise the library and make the device enter standby-I mode
+  if(NRF_Init(&hspi1, NRF_CSN_GPIO_Port, NRF_CSN_Pin, NRF_CE_GPIO_Port, NRF_CE_Pin) != NRF_OK) {
+    printf("Couldn't initialise device, are pins correctly connected?\r\n");
+    Error_Handler();
+  }
+
+  // Resets all registers but keeps the device in standby-I mode
   NRF_Reset();
 
   // Config
@@ -122,13 +149,16 @@ void runExample() {
   NRF_SetRegisterBit(NRF_REG_FEATURE, 1);
   NRF_SetRegisterBit(NRF_REG_FEATURE, 2);
   NRF_SetRegisterBit(NRF_REG_DYNPD, 0);
-  uint8_t msg[10] = "HelloThere";
-  NRF_WriteAckPayload(msg, 10);
 
   // Start
   NRF_EnterMode(NRF_MODE_RX);
   printf("Entered RX mode...\r\n");
 }
+
+/**************************************
+ *           EXAMPLE CODE END
+ **************************************/
+
 /* USER CODE END 0 */
 
 /**

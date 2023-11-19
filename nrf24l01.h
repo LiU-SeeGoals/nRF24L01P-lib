@@ -18,7 +18,7 @@
 //!@{
 
 //! Timeout for all SPI communication attempts.
-#define NRF_SPI_TIMEOUT     10
+#define NRF_SPI_TIMEOUT_DUR     10
 //!@}
 
 
@@ -101,10 +101,17 @@
 //!@}
 
 /**
- * \brief Currently we're just copying HAL's status.
- * @anchor NRF_Status
+ * \brief Basically HAL_StatusTypeDef but with a few additions.
  */
-typedef HAL_StatusTypeDef NRF_Status;
+typedef enum
+{
+  NRF_OK            = 0x00, //!< All went well
+  NRF_SPI_ERROR     = 0x01, //!< Unspecified SPI error
+  NRF_SPI_BUSY      = 0x02, //!< SPI device busy
+  NRF_SPI_TIMEOUT   = 0x03, //!< SPI communication timed out
+  NRF_ERROR         = 0x04, //!< Unspecified general error
+  NRF_MAX_RT        = 0x05  //!< Max retries on packet transmission
+} NRF_Status;
 
 
 /**

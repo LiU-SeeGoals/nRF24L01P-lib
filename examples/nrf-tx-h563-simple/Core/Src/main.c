@@ -63,7 +63,12 @@ static void MX_USART3_UART_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-/**** TO GET PRINTF TO OUTPUT TO USART3 *****/
+/**************************************
+ *           EXAMPLE CODE BEGIN
+ **************************************/
+
+// BEGIN REDIRECT
+// This is used to redirect printf to UART
 #ifdef __GNUC__
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
 #else
@@ -75,7 +80,7 @@ PUTCHAR_PROTOTYPE
   HAL_UART_Transmit(&huart3, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
   return ch;
 }
-/*******************************************/
+// END REDIRECT
 
 // This is ran when user button is pressed
 void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin) {
@@ -86,31 +91,51 @@ void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin) {
 
     uint8_t msg[10] = "HelloWorld";
     NRF_Status ret = NRF_TransmitAndWait(msg, 10);
-    if (ret != HAL_OK) {
-      printf("Couldn't send data...\r\n");
-    } else {
-      printf("Data sent...\r\n");
+    switch (ret) {
+      case NRF_MAX_RT:
+        printf("Max retransmissions reached, RX device not responding?\r\n");
+        break;
+      case NRF_SPI_BUSY:
+      case NRF_SPI_TIMEOUT:
+      case NRF_SPI_ERROR:
+        printf("SPI error, pins correctly connected?\r\n");
+        break;
+      case NRF_OK:
+        printf("Data sent...\r\n");
+        break;
+      case NRF_ERROR:
+        printf("Error when sending.\r\n");
+        break;
     }
   }
 }
 
+// Configure the device
 void runExample() {
-  printf("Starting up simple transmitter H5...\r\n\r\n");
+  printf("\r\nStarting up simple TX H5...\r\n");
 
   // Initialise the library and make the device enter standby-I mode
-  NRF_Init(&hspi1, NRF_CSN_GPIO_Port, NRF_CSN_Pin, NRF_CE_GPIO_Port, NRF_CE_Pin);
+  if(NRF_Init(&hspi1, NRF_CSN_GPIO_Port, NRF_CSN_Pin, NRF_CE_GPIO_Port, NRF_CE_Pin) != NRF_OK) {
+    printf("Couldn't initialise device, are pins correctly connected?\r\n");
+    Error_Handler();
+  }
 
   // Resets all registers but keeps the device in standby-I mode
   NRF_Reset();
 
-  // Set the transmit adress.
+  // Set the transmit adress
   uint8_t address[5] = {1,2,3,4,5};
   NRF_WriteRegister(NRF_REG_TX_ADDR, address, 5);
 
   // To be able to receive auto acknowledgement from the receiver
-  // we need to enter a receive address as well.
+  // we need to enter a receive address as well
   NRF_WriteRegister(NRF_REG_RX_ADDR_P0, address, 5);
 }
+
+/**************************************
+ *           EXAMPLE CODE END
+ **************************************/
+
 /* USER CODE END 0 */
 
 /**
