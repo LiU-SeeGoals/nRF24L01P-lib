@@ -51,7 +51,6 @@ SPI_HandleTypeDef hspi1;
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
-uint8_t count = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -85,48 +84,21 @@ PUTCHAR_PROTOTYPE
 }
 // END REDIRECT
 
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
-  switch(GPIO_Pin) {
-    case BTN_USER_Pin:
-      NRF_PrintFIFOStatus();
-      NRF_PrintStatus();
-      break;
-    case NRF_IRQ_Pin:
-      {
-        uint8_t status = NRF_ReadStatus();
-        if (status & 0x40) {
-          // RX_DR (Data Ready RX FIFO interrupt) set
+// Variables
+uint8_t addresses[6][5] = {
+  {0x00,0x10,0x20,0x30,0x40},
+  {0x40,0x30,0x20,0x10,0x00},
+  {0x57},
+  {0x96},
+  {0x13},
+  {0x37},
+};
+uint8_t pipe = 0;
+uint8_t count = 0;
+uint8_t printRDP = 0;
 
-          // Read the data
-          uint8_t payload[10];
-          NRF_ReadPayload(payload, 10);
-          printf("Payload:");
-          for (int i = 0; i < 10; i++) {
-            printf("%c", payload[i]);
-          }
-          printf("\r\n");
-
-          // Reset RX_DR
-          NRF_SetRegisterBit(NRF_REG_STATUS, 6);
-
-          // If we've received two messages, send
-          // something back next time
-          if (count == 3) {
-            // Write the payload to send with the ACK
-            uint8_t msg[10] = "HelloThere";
-            NRF_WriteAckPayload(msg, 10);
-            count = 0;
-          }
-
-          count++;
-        }
-      }
-      break;
-    default:
-      printf("Unhandled interrupt...\r\n");
-      break;
-  }
-}
+// Functions
+void readData(uint8_t pipe);
 
 void runExample() {
   printf("\r\nStarting up complete RX H7...\r\n");
@@ -141,19 +113,120 @@ void runExample() {
   NRF_Reset();
 
   // Config
-  uint8_t address[5] = {1,2,3,4,5};
-  NRF_WriteRegister(NRF_REG_RX_ADDR_P0, address, 5);
-  NRF_WriteRegisterByte(NRF_REG_RX_PW_P0, 10); // datawidth
+  NRF_WriteRegisterByte(NRF_REG_RF_CH, 0x0F);
+  NRF_WriteRegister(NRF_REG_RX_ADDR_P0, addresses[0], 5);
+  NRF_WriteRegister(NRF_REG_RX_ADDR_P1, addresses[1], 5);
+  NRF_WriteRegister(NRF_REG_RX_ADDR_P2, addresses[2], 1);
+  NRF_WriteRegister(NRF_REG_RX_ADDR_P3, addresses[3], 1);
+  NRF_WriteRegister(NRF_REG_RX_ADDR_P4, addresses[4], 1);
+  NRF_WriteRegister(NRF_REG_RX_ADDR_P5, addresses[5], 1);
+  NRF_WriteRegisterByte(NRF_REG_RX_PW_P0, 10);
+  NRF_WriteRegisterByte(NRF_REG_RX_PW_P1, 10);
+  NRF_WriteRegisterByte(NRF_REG_RX_PW_P2, 10);
+  NRF_WriteRegisterByte(NRF_REG_RX_PW_P3, 10);
+  NRF_WriteRegisterByte(NRF_REG_RX_PW_P4, 10);
+  NRF_WriteRegisterByte(NRF_REG_RX_PW_P5, 10);
+  NRF_WriteRegisterByte(NRF_REG_EN_RXADDR, 0x3F); // enable all RX pipes
  
   // Enable ACK payloads (which needs dynamic payload length enabled)
-  NRF_SetRegisterBit(NRF_REG_FEATURE, 1);
-  NRF_SetRegisterBit(NRF_REG_FEATURE, 2);
-  NRF_SetRegisterBit(NRF_REG_DYNPD, 0);
+  NRF_SetRegisterBit(NRF_REG_FEATURE, 1); // EN_ACK_PAY
+  NRF_SetRegisterBit(NRF_REG_FEATURE, 2); // EN_DPL
+  NRF_WriteRegisterByte(NRF_REG_DYNPD, 0x3F);
 
   // Start
   NRF_EnterMode(NRF_MODE_RX);
   printf("Entered RX mode...\r\n");
+
+  uint16_t avg = 0;
+  uint16_t cycles = 0;
+  for (;;) {
+    if (printRDP) {
+      uint8_t RPD = NRF_ReadRegisterByte(NRF_REG_RPD);
+      if (RPD) {
+        avg++;
+      }
+
+      if (cycles == 0xFFFF) {
+        printf("RDP average: %i\r\n", avg/cycles);
+
+        cycles = 0;
+        avg = 0;
+      } else {
+        cycles++;
+      }
+    }
+  }
 }
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+  switch(GPIO_Pin) {
+    case BTN_USER_Pin:
+      NRF_PrintFIFOStatus();
+      NRF_PrintStatus();
+      break;
+    case NRF_IRQ_Pin:
+      {
+        uint8_t status = NRF_ReadStatus();
+        if (status & 0x40) {
+          // RX_DR (Data Ready RX FIFO interrupt) set
+          readData((status & 0x0E) >> 1);
+        }
+      }
+      break;
+    default:
+      printf("Unhandled interrupt...\r\n");
+      break;
+  }
+}
+
+void readData(uint8_t pipe) {
+  uint8_t length = 0x00;
+  NRF_SendReadCommand(NRF_CMD_R_RX_PL_WID, &length, 1);
+  uint8_t payload[length];
+  NRF_ReadPayload(payload, length);
+  uint8_t command[12] = "sending wave";
+
+  printf("Payload of length %i from pipe %i: ", length, pipe);
+  for (int i = 0; i < length; i++) {
+    printf("%c", payload[i]);
+  }
+  printf("\r\n");
+
+  // Add a payload to send with the next ACK message coming
+  // from this pipe.
+  if (count == 3) {
+    uint8_t msg[18] = "Hello from pipe ";
+    msg[17] = '0' + pipe;
+
+    // The payload could be of variable length
+    NRF_WriteAckPayload(pipe, msg, 18);
+    count = 0;
+    pipe++;
+    pipe %= 6;
+  } else {
+    count++;
+  }
+
+  if (length == 12) {
+    for (int i = 0; i < 12; i++) {
+      if(command[i] != payload[i]){
+        break;
+      } else if (i == 11) {
+        if (!printRDP) {
+          printRDP = 1;
+          printf("Printing RDP...\r\n");
+        } else {
+          printRDP = 0;
+          printf("Stop printing RDP...\r\n");
+        }
+      }
+    }
+  }
+
+  // Reset RX_DR
+  NRF_SetRegisterBit(NRF_REG_STATUS, 6);
+}
+
 
 /**************************************
  *           EXAMPLE CODE END

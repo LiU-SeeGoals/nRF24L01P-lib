@@ -47,7 +47,6 @@ SPI_HandleTypeDef hspi1;
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
-uint8_t count = 'a';
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -82,12 +81,42 @@ PUTCHAR_PROTOTYPE
 }
 // END REDIRECT
 
+// Variables
+uint8_t count = 'a';
+uint8_t currAddr = 0;
+uint8_t length = 1;
+uint8_t printRDP = 0;
+uint8_t toggleRxRDP = 0;
+uint8_t addresses[6][5] = {
+  {0x00,0x10,0x20,0x30,0x40},
+  {0x40,0x30,0x20,0x10,0x00},
+  {0x57,0x30,0x20,0x10,0x00},
+  {0x96,0x30,0x20,0x10,0x00},
+  {0x13,0x30,0x20,0x10,0x00},
+  {0x37,0x30,0x20,0x10,0x00},
+};
+
+void printTXAddress() {
+  uint8_t txAddr[5];
+  NRF_ReadRegister(NRF_REG_TX_ADDR, txAddr, 5);
+  for (int i = 0; i < 5; i++) {
+    printf("%2x ", txAddr[i]);
+  }
+  printf("\r\n");
+}
+
 // We've configured the user button to interrupt on rising edge
 void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin) {
   switch (GPIO_Pin) {
     case BTN_USER_Pin:
       NRF_PrintStatus();
       NRF_PrintFIFOStatus();
+
+      if (!printRDP) {
+        toggleRxRDP = 1;
+      } else {
+        toggleRxRDP = 1;
+      }
       break;
     default:
       printf("Unhandled rising interrupt...\r\n");
@@ -103,24 +132,35 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin) {
         uint8_t status = NRF_ReadStatus();
         if (status & (1<<4)) {
           // MAX_RT
-          printf("Reached max retransmissions...\r\n");
-          NRF_SetRegisterBit(NRF_REG_STATUS, 4);
+          printf("MAX_RT address: ");
+          printTXAddress();
+          NRF_SetRegisterBit(NRF_REG_STATUS, 4); // Reset MAX_RT
         }
 
         if (status & (1<<5)) {
           // TX_DS
-          printf("Data sent...\r\n");
-          NRF_SetRegisterBit(NRF_REG_STATUS, 5);
+          printf("Successful TX to address: ");
+          printTXAddress();
+          NRF_SetRegisterBit(NRF_REG_STATUS, 5); // Reset TX_DS
+
+          currAddr++;
+          currAddr %= 6;
+          length++;
+          if (length > 32) {
+            length = 1;
+          }
+          NRF_WriteRegister(NRF_REG_TX_ADDR, addresses[currAddr], 5);
+          NRF_WriteRegister(NRF_REG_RX_ADDR_P0, addresses[currAddr], 5);
         }
 
         if (status & (1<<6)) {
           // RX_DR
-          NRF_SetRegisterBit(NRF_REG_STATUS, 5);
-
-          uint8_t payload[10];
-          NRF_ReadPayload(payload, 10);
+          uint8_t length = 0x00;
+          NRF_SendReadCommand(NRF_CMD_R_RX_PL_WID, &length, 1);
+          uint8_t payload[length];
+          NRF_ReadPayload(payload, length);
           printf("Received data: ");
-          for (int i = 0; i < 10; i++) {
+          for (int i = 0; i < length; i++) {
             printf("%c", payload[i]);
           }
           printf("\r\n");
@@ -128,6 +168,8 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin) {
           if (count=='z') {
             count = 'a';
           }
+
+          NRF_SetRegisterBit(NRF_REG_STATUS, 6); // Reset RX_DR
         }
       }
       break;
@@ -146,21 +188,41 @@ void runExample() {
     Error_Handler();
   }
 
+  // Resets all registers but keeps the device in standby-I mode
   NRF_Reset();
 
   // Config
-  uint8_t address[5] = {1,2,3,4,5};
-  NRF_WriteRegister(NRF_REG_TX_ADDR, address, 5);
-  NRF_WriteRegister(NRF_REG_RX_ADDR_P0, address, 5); // for auto acknowledgement
+  NRF_WriteRegisterByte(NRF_REG_RF_CH, 0x0F);
+  NRF_WriteRegister(NRF_REG_TX_ADDR, addresses[currAddr], 5);
+  NRF_WriteRegister(NRF_REG_RX_ADDR_P0, addresses[currAddr], 5);
 
-  // Enable ACK payloads (which needs dynamic payload length enabled)
-  NRF_SetRegisterBit(NRF_REG_FEATURE, 1);
-  NRF_SetRegisterBit(NRF_REG_FEATURE, 2);
-  NRF_SetRegisterBit(NRF_REG_DYNPD, 0);
+  // We have to enable dynamic payload for pipe 0 since
+  // the receiver will send back a payload in ACK (which
+  // will have dynamic length).
+  NRF_SetRegisterBit(NRF_REG_FEATURE, 1); // EN_ACK_PAY
+  NRF_SetRegisterBit(NRF_REG_FEATURE, 2); // EN_DPL
+  NRF_SetRegisterBit(NRF_REG_DYNPD, 0); // Dynamic payload
 
   for(;;) {
-    uint8_t msg[10] = {count};
-    NRF_Transmit(msg, 10);
+    if (toggleRxRDP) {
+      uint8_t payload[12] = "sending wave";
+      toggleRxRDP = 0;
+
+      if (printRDP) {
+        NRF_Transmit(payload, 12);
+        printf("Sending stop print RDP command...\r\n");
+      } else {
+        NRF_Transmit(payload, 12);
+        printf("Sending print RDP command...\r\n");
+      }
+    } else {
+      uint8_t payload[length];
+      for (int i = 0; i < length; i++) {
+        payload[i] = count;
+      }
+      NRF_Transmit(payload, length);
+    }
+
     HAL_Delay(1000);
   }
 }
