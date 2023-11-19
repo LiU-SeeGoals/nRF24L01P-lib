@@ -247,7 +247,7 @@ typedef enum
    *
    * \param payload Buffer with payload.
    * \param length Length of buffer.
-   * \return HAL_OK on success, HAL_ERROR else.
+   * \return HAL_OK on success, HAL_MAX_RT if max retransmits reached, or a SPI error.
    */
   NRF_Status NRF_TransmitAndWait(uint8_t *payload, uint8_t length);
 //!@}

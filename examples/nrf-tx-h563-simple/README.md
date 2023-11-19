@@ -5,7 +5,7 @@ Press the user button (blue) to send a message, the [simple receiver](https://gi
 
 It prints info on UART (115200 baud rate).
 
-All code of interest is within `/* USER CODE BEGIN 0 */`, generally all other code is generated from STM32CubeMX. You can use the provided .ioc file to generate it.
+All code of interest is within `/* USER CODE BEGIN 0 */` inside of `main.c`, generally all other code is generated from STM32CubeMX. You can use the provided .ioc file to generate it.
 
 ## Pins
 Import the IOC file (or the project) to see these pins.

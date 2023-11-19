@@ -5,7 +5,7 @@ When the board start ups it recieves messages forever and prints the received pa
 
 If the user button (blue) is pressed the status and FIFO status registers will be printed.
 
-All code of interest is within `/* USER CODE BEGIN 0 */`, generally all other code is generated from STM32CubeMX. You can use the provided .ioc file to generate it.
+All code of interest is within `/* USER CODE BEGIN 0 */` inside of `main.c` of the `CM7` core, generally all other code is generated from STM32CubeMX. You can use the provided .ioc file to generate it.
 
 ## Clock
 You might have to resolve clock issues from the MX view. Go into "Clock Configuration" and press "Resolve Clock Issues".
