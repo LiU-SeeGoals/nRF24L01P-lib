@@ -82,7 +82,29 @@ PUTCHAR_PROTOTYPE
 }
 // END REDIRECT
 
-// This is ran when user button is pressed
+// Configure the device
+void runExample() {
+  printf("\r\nStarting up simple TX H5...\r\n");
+
+  // Initialise the library and make the device enter standby-I mode
+  if(NRF_Init(&hspi1, NRF_CSN_GPIO_Port, NRF_CSN_Pin, NRF_CE_GPIO_Port, NRF_CE_Pin) != NRF_OK) {
+    printf("Couldn't initialise device, are pins correctly connected?\r\n");
+    Error_Handler();
+  }
+
+  // Resets all registers but keeps the device in standby-I mode
+  NRF_Reset();
+
+  // Set the transmit adress
+  uint8_t address[5] = {1,2,3,4,5};
+  NRF_WriteRegister(NRF_REG_TX_ADDR, address, 5);
+
+  // To be able to receive auto acknowledgement from the receiver
+  // we need to enter a receive address as well
+  NRF_WriteRegister(NRF_REG_RX_ADDR_P0, address, 5);
+}
+
+// This runs when user button is pressed
 void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin) {
   if (GPIO_Pin == BTN_USER_Pin) {
     NRF_PrintStatus();
@@ -110,27 +132,6 @@ void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin) {
   }
 }
 
-// Configure the device
-void runExample() {
-  printf("\r\nStarting up simple TX H5...\r\n");
-
-  // Initialise the library and make the device enter standby-I mode
-  if(NRF_Init(&hspi1, NRF_CSN_GPIO_Port, NRF_CSN_Pin, NRF_CE_GPIO_Port, NRF_CE_Pin) != NRF_OK) {
-    printf("Couldn't initialise device, are pins correctly connected?\r\n");
-    Error_Handler();
-  }
-
-  // Resets all registers but keeps the device in standby-I mode
-  NRF_Reset();
-
-  // Set the transmit adress
-  uint8_t address[5] = {1,2,3,4,5};
-  NRF_WriteRegister(NRF_REG_TX_ADDR, address, 5);
-
-  // To be able to receive auto acknowledgement from the receiver
-  // we need to enter a receive address as well
-  NRF_WriteRegister(NRF_REG_RX_ADDR_P0, address, 5);
-}
 
 /**************************************
  *           EXAMPLE CODE END

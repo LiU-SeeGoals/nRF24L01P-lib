@@ -85,14 +85,6 @@ PUTCHAR_PROTOTYPE
 }
 // END REDIRECT
 
-// This is ran when user button is pressed
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
-  if (GPIO_Pin == BTN_USER_Pin) {
-    NRF_PrintStatus();
-    NRF_PrintFIFOStatus();
-  }
-}
-
 // Configure the device and wait for packages forever.
 void runExample() {
   printf("\r\nStarting up simple RX H7...\r\n");
@@ -135,6 +127,14 @@ void runExample() {
       // Reset RX_DR
       NRF_SetRegisterBit(NRF_REG_STATUS, 6);
     }
+  }
+}
+
+// This runs when user button is pressed
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+  if (GPIO_Pin == BTN_USER_Pin) {
+    NRF_PrintStatus();
+    NRF_PrintFIFOStatus();
   }
 }
 
