@@ -2,4 +2,5 @@ compile_commands.json
 html/
 latex/
 Debug/
+Release/
 .cache/
