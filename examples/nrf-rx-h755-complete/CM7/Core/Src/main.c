@@ -84,7 +84,11 @@ PUTCHAR_PROTOTYPE
 }
 // END REDIRECT
 
-// Variables
+/* Variables */
+
+// The address for pipe 0 and 1 can contain 40 bits,
+// but pipes 2-5 use bytes 39:8 of pipe 1 and only define
+// the lower eight bits manually.
 uint8_t addresses[6][5] = {
   {0x00,0x10,0x20,0x30,0x40},
   {0x40,0x30,0x20,0x10,0x00},
@@ -93,83 +97,84 @@ uint8_t addresses[6][5] = {
   {0x13},
   {0x37},
 };
+
+// Used to send ACK package payloads from different pipes.
 uint8_t pipe = 0;
 uint8_t count = 0;
-uint8_t printRDP = 0;
 
-// Functions
+/* Functions */
 void readData(uint8_t pipe);
 
+// Runs the example.
 void runExample() {
   printf("\r\nStarting up complete RX H7...\r\n");
 
-  // Initialise the library and make the device enter standby-I mode
+  // Initialise the library and make the device enter standby-I mode.
   if(NRF_Init(&hspi1, NRF_CSN_GPIO_Port, NRF_CSN_Pin, NRF_CE_GPIO_Port, NRF_CE_Pin) != NRF_OK) {
     printf("Couldn't initialise device, are pins correctly connected?\r\n");
     Error_Handler();
   }
 
-  // Resets all registers but keeps the device in standby-I mode
+  // Resets all registers and FIFOs but keeps the device in standby-I mode.
   NRF_Reset();
 
-  // Config
+  // Set the RF channel frequency, it's defined as: 2400 + NRF_REG_RF_CH [MHz]
   NRF_WriteRegisterByte(NRF_REG_RF_CH, 0x0F);
+
+  // Setup addresses to all pipes (P0-P5)
   NRF_WriteRegister(NRF_REG_RX_ADDR_P0, addresses[0], 5);
   NRF_WriteRegister(NRF_REG_RX_ADDR_P1, addresses[1], 5);
   NRF_WriteRegister(NRF_REG_RX_ADDR_P2, addresses[2], 1);
   NRF_WriteRegister(NRF_REG_RX_ADDR_P3, addresses[3], 1);
   NRF_WriteRegister(NRF_REG_RX_ADDR_P4, addresses[4], 1);
   NRF_WriteRegister(NRF_REG_RX_ADDR_P5, addresses[5], 1);
-  NRF_WriteRegisterByte(NRF_REG_RX_PW_P0, 10);
-  NRF_WriteRegisterByte(NRF_REG_RX_PW_P1, 10);
-  NRF_WriteRegisterByte(NRF_REG_RX_PW_P2, 10);
-  NRF_WriteRegisterByte(NRF_REG_RX_PW_P3, 10);
-  NRF_WriteRegisterByte(NRF_REG_RX_PW_P4, 10);
-  NRF_WriteRegisterByte(NRF_REG_RX_PW_P5, 10);
-  NRF_WriteRegisterByte(NRF_REG_EN_RXADDR, 0x3F); // enable all RX pipes
- 
-  // Enable ACK payloads (which needs dynamic payload length enabled)
-  NRF_SetRegisterBit(NRF_REG_FEATURE, 1); // EN_ACK_PAY
-  NRF_SetRegisterBit(NRF_REG_FEATURE, 2); // EN_DPL
+
+  // Enable all pipes (so we can receive on them all)
+  NRF_WriteRegisterByte(NRF_REG_EN_RXADDR, 0x3F);
+
+  /* To enable ACK payloads we need to setup dynamic payload length. */
+
+  // Enables us to send custom payload with ACKs.
+  NRF_SetRegisterBit(NRF_REG_FEATURE, 1);
+
+  // Enables dynamic payload length generally.
+  NRF_SetRegisterBit(NRF_REG_FEATURE, 2);
+
+  // Enable dynamic payload lengths on all data pipes.
+  // If we didn't do this we'd have to set the payload width
+  // that we were going to use for all pipes.
   NRF_WriteRegisterByte(NRF_REG_DYNPD, 0x3F);
 
-  // Start
+  // Enter RX mode and wait for packets.
+  // When we get a package NRF_IRQ will be set low,
+  // which we handle in the interrupt callback below.
   NRF_EnterMode(NRF_MODE_RX);
   printf("Entered RX mode...\r\n");
 
-  uint16_t avg = 0;
-  uint16_t cycles = 0;
   for (;;) {
-    if (printRDP) {
-      uint8_t RPD = NRF_ReadRegisterByte(NRF_REG_RPD);
-      if (RPD) {
-        avg++;
-      }
-
-      if (cycles == 0xFFFF) {
-        printf("RDP average: %i\r\n", avg/cycles);
-
-        cycles = 0;
-        avg = 0;
-      } else {
-        cycles++;
-      }
-    }
+    // wait forever
   }
 }
 
+// Interrupt handler
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
   switch(GPIO_Pin) {
     case BTN_USER_Pin:
+      // User button was pressed, just print info.
       NRF_PrintFIFOStatus();
       NRF_PrintStatus();
       break;
     case NRF_IRQ_Pin:
       {
+        // NRF_IRQ was pulled, check whether the status
+        // register is saying we've received a package.
         uint8_t status = NRF_ReadStatus();
         if (status & 0x40) {
-          // RX_DR (Data Ready RX FIFO interrupt) set
-          readData((status & 0x0E) >> 1);
+          // RX_DR is set in register (Data Ready RX FIFO interrupt bit)
+
+          // Read what pipe received this package.
+          uint8_t pipe = (status & 0x0E) >> 1;
+          readData(pipe);
         }
       }
       break;
@@ -179,27 +184,36 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
   }
 }
 
+// Handle the package
 void readData(uint8_t pipe) {
+  uint8_t special[19] = "user button pressed";
+
+  // Since we have dynamic payload width we'll have to
+  // check what the length of the last received package is (which
+  // we're currently handling).
   uint8_t length = 0x00;
   NRF_SendReadCommand(NRF_CMD_R_RX_PL_WID, &length, 1);
+
+  // Once we have the length we can read the payload.
   uint8_t payload[length];
   NRF_ReadPayload(payload, length);
-  uint8_t command[12] = "sending wave";
 
+  // Print the payload.
   printf("Payload of length %i from pipe %i: ", length, pipe);
   for (int i = 0; i < length; i++) {
     printf("%c", payload[i]);
   }
   printf("\r\n");
 
-  // Add a payload to send with the next ACK message coming
-  // from this pipe.
+  // If we've received three packages we'll send something back
+  // the next time this pipe sends an ACK.
   if (count == 3) {
     uint8_t msg[18] = "Hello from pipe ";
     msg[17] = '0' + pipe;
 
-    // The payload could be of variable length
+    // Note: The ACK payload can have variable length.
     NRF_WriteAckPayload(pipe, msg, 18);
+
     count = 0;
     pipe++;
     pipe %= 6;
@@ -207,23 +221,21 @@ void readData(uint8_t pipe) {
     count++;
   }
 
-  if (length == 12) {
-    for (int i = 0; i < 12; i++) {
-      if(command[i] != payload[i]){
+  // If the length of the received package is 19 we could have
+  // received a special message (which is sent from transmitter
+  // when user button is pressed).
+  if (length == 19) {
+    for (int i = 0; i < 19; i++) {
+      if(special[i] != payload[i]){
         break;
-      } else if (i == 11) {
-        if (!printRDP) {
-          printRDP = 1;
-          printf("Printing RDP...\r\n");
-        } else {
-          printRDP = 0;
-          printf("Stop printing RDP...\r\n");
-        }
+      } else if (i == 18) {
+        printf("User button pressed on H7...\r\n");
       }
     }
   }
 
-  // Reset RX_DR
+  // Reset the RX_DR bit so we can receive
+  // new packages.
   NRF_SetRegisterBit(NRF_REG_STATUS, 6);
 }
 

@@ -81,12 +81,17 @@ PUTCHAR_PROTOTYPE
 }
 // END REDIRECT
 
-// Variables
-uint8_t count = 'a';
-uint8_t currAddr = 0;
-uint8_t length = 1;
-uint8_t printRDP = 0;
-uint8_t toggleRxRDP = 0;
+/* Variables */
+
+// We'll send to different pipes on the receiver by using
+// different addresses.
+//
+// The address for pipe 0 and 1 can contain 40 bits,
+// but pipes 2-5 use bytes 39:8 of pipe 1 and only define
+// the lower eight bits manually.
+//
+// We define all bits here to make it easier changing TX
+// address later on.
 uint8_t addresses[6][5] = {
   {0x00,0x10,0x20,0x30,0x40},
   {0x40,0x30,0x20,0x10,0x00},
@@ -95,7 +100,15 @@ uint8_t addresses[6][5] = {
   {0x13,0x30,0x20,0x10,0x00},
   {0x37,0x30,0x20,0x10,0x00},
 };
+uint8_t currAddr = 0;
 
+// These are used to send different data.
+uint8_t charToSend = 'a';
+uint8_t length = 1;
+
+/* Functions */
+
+// Just used to easily print what address we're sending to.
 void printTXAddress() {
   uint8_t txAddr[5];
   NRF_ReadRegister(NRF_REG_TX_ADDR, txAddr, 5);
@@ -105,18 +118,68 @@ void printTXAddress() {
   printf("\r\n");
 }
 
-// We've configured the user button to interrupt on rising edge
+// Runs the example.
+void runExample() {
+  printf("\r\nStarting up complete TX H5...\r\n");
+
+  // Initialise the library and make the device enter standby-I mode
+  if(NRF_Init(&hspi1, NRF_CSN_GPIO_Port, NRF_CSN_Pin, NRF_CE_GPIO_Port, NRF_CE_Pin) != NRF_OK) {
+    printf("Couldn't initialise device, are pins correctly connected?\r\n");
+    Error_Handler();
+  }
+
+  // Resets all registers but keeps the device in standby-I mode
+  NRF_Reset();
+
+  // Set the RF channel frequency, it's defined as: 2400 + NRF_REG_RF_CH [MHz]
+  NRF_WriteRegisterByte(NRF_REG_RF_CH, 0x0F);
+
+  // Setup the TX address.
+  // We also have to set pipe 0 to receive on the same address.
+  NRF_WriteRegister(NRF_REG_TX_ADDR, addresses[currAddr], 5);
+  NRF_WriteRegister(NRF_REG_RX_ADDR_P0, addresses[currAddr], 5);
+
+  /* To enable ACK payloads we need to setup dynamic payload length. */
+
+  // Enables us to send custom payload with ACKs.
+  NRF_SetRegisterBit(NRF_REG_FEATURE, 1);
+
+  // Enables dynamic payload length generally.
+  NRF_SetRegisterBit(NRF_REG_FEATURE, 2);
+
+  // Enables dynamic payload on pipe 0.
+  NRF_SetRegisterBit(NRF_REG_DYNPD, 0);
+
+  // Continously send packages with one second delay between each.
+  // Errors are handled in the interrupt callback for falling edge
+  // below.
+  for(;;) {
+    // We want to send an variable length for each package
+    // to check that dynamic payload length is working.
+    uint8_t payload[length];
+    for (int i = 0; i < length; i++) {
+      payload[i] = charToSend;
+    }
+
+    // Transmit the package.
+    NRF_Transmit(payload, length);
+
+    // Wait one second.
+    HAL_Delay(1000);
+  }
+}
+
+// We've configured the user button to interrupt on rising edge.
 void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin) {
   switch (GPIO_Pin) {
     case BTN_USER_Pin:
+      // Print info.
       NRF_PrintStatus();
       NRF_PrintFIFOStatus();
 
-      if (!printRDP) {
-        toggleRxRDP = 1;
-      } else {
-        toggleRxRDP = 1;
-      }
+      // Send special message.
+      uint8_t special[19] = "user button pressed";
+      NRF_Transmit(special, 19);
       break;
     default:
       printf("Unhandled rising interrupt...\r\n");
@@ -124,25 +187,33 @@ void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin) {
   }
 }
 
-// We've configured the NRF to interrupt on falling edge
+// We've configured the NRF_IRQ to trigger interrupt
+// callback on falling edge.
 void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin) {
   switch (GPIO_Pin) {
     case NRF_IRQ_Pin:
       {
         uint8_t status = NRF_ReadStatus();
         if (status & (1<<4)) {
-          // MAX_RT
+          // MAX_RT is set in status register.
+          // We've tried resending the message the maximum
+          // amount of times.
           printf("MAX_RT address: ");
           printTXAddress();
-          NRF_SetRegisterBit(NRF_REG_STATUS, 4); // Reset MAX_RT
+
+          // Reset MAX_RT in status register.
+          NRF_SetRegisterBit(NRF_REG_STATUS, 4);
         }
 
         if (status & (1<<5)) {
-          // TX_DS
+          // TX_DS is set in status register.
+          // This means we've gotten an ACK from the receiver
+          // and the message was thus succesfully received.
           printf("Successful TX to address: ");
           printTXAddress();
           NRF_SetRegisterBit(NRF_REG_STATUS, 5); // Reset TX_DS
 
+          // Send on the next address next time around.
           currAddr++;
           currAddr %= 6;
           length++;
@@ -164,9 +235,9 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin) {
             printf("%c", payload[i]);
           }
           printf("\r\n");
-          count++;
-          if (count=='z') {
-            count = 'a';
+          charToSend++;
+          if (charToSend=='z') {
+            charToSend = 'a';
           }
 
           NRF_SetRegisterBit(NRF_REG_STATUS, 6); // Reset RX_DR
@@ -176,54 +247,6 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin) {
     default:
       printf("Unhandled falling interrupt...\r\n");
       break;
-  }
-}
-
-void runExample() {
-  printf("\r\nStarting up complete TX H5...\r\n");
-
-  // Initialise the library and make the device enter standby-I mode
-  if(NRF_Init(&hspi1, NRF_CSN_GPIO_Port, NRF_CSN_Pin, NRF_CE_GPIO_Port, NRF_CE_Pin) != NRF_OK) {
-    printf("Couldn't initialise device, are pins correctly connected?\r\n");
-    Error_Handler();
-  }
-
-  // Resets all registers but keeps the device in standby-I mode
-  NRF_Reset();
-
-  // Config
-  NRF_WriteRegisterByte(NRF_REG_RF_CH, 0x0F);
-  NRF_WriteRegister(NRF_REG_TX_ADDR, addresses[currAddr], 5);
-  NRF_WriteRegister(NRF_REG_RX_ADDR_P0, addresses[currAddr], 5);
-
-  // We have to enable dynamic payload for pipe 0 since
-  // the receiver will send back a payload in ACK (which
-  // will have dynamic length).
-  NRF_SetRegisterBit(NRF_REG_FEATURE, 1); // EN_ACK_PAY
-  NRF_SetRegisterBit(NRF_REG_FEATURE, 2); // EN_DPL
-  NRF_SetRegisterBit(NRF_REG_DYNPD, 0); // Dynamic payload
-
-  for(;;) {
-    if (toggleRxRDP) {
-      uint8_t payload[12] = "sending wave";
-      toggleRxRDP = 0;
-
-      if (printRDP) {
-        NRF_Transmit(payload, 12);
-        printf("Sending stop print RDP command...\r\n");
-      } else {
-        NRF_Transmit(payload, 12);
-        printf("Sending print RDP command...\r\n");
-      }
-    } else {
-      uint8_t payload[length];
-      for (int i = 0; i < length; i++) {
-        payload[i] = count;
-      }
-      NRF_Transmit(payload, length);
-    }
-
-    HAL_Delay(1000);
   }
 }
 
