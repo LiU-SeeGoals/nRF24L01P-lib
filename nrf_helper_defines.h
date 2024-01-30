@@ -16,6 +16,7 @@
 #define STATUS_RX_DR          6
 #define FEATURE_EN_ACK_PAY    1
 #define FEATURE_EN_DPL        2
+#define DYNPD_DPL_P0          0
 //!@}
 
 /**
