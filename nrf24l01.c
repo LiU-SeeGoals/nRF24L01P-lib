@@ -30,7 +30,7 @@ uint16_t NRF_CSN_Pin;
 GPIO_TypeDef *NRF_CE_Port;
 uint16_t NRF_CE_Pin;
 uint32_t CPU_Freq = 0x00;
-
+int current_mode = NRF_MODE_POWERDOWN;
 
 /*
  * Private functions
@@ -61,11 +61,11 @@ uint8_t read_ce() {
 }
 
 void wait(uint64_t us) {
-  uint32_t cycles = CPU_Freq * us * pow(10, -6);
-  uint32_t current = 0;
-  do {
+  uint32_t volatile cycles = CPU_Freq * us / 1000000;
+  uint32_t volatile current = 0;
+  while (current <= cycles) {
     current++;
-  } while (current <= cycles);
+  }
 }
 
 
@@ -87,7 +87,7 @@ NRF_Status NRF_Init(SPI_HandleTypeDef *handle, GPIO_TypeDef *PortCSN, uint16_t P
     return NRF_ERROR;
   }
 
-  // Make sure CSN i pulled high
+  // Make sure CSN is pulled high
   csn_set();
 
   // Takes ~100ms from power on to start up
@@ -159,28 +159,42 @@ NRF_Status NRF_EnterMode(uint8_t mode) {
 
   switch(mode) {
     case NRF_MODE_POWERDOWN:
-      // Can come from any mode
       ret = NRF_ResetRegisterBit(NRF_REG_CONFIG, CFG_BIT_PWR_UP);
-    case NRF_MODE_STANDBY1:
-      // We expect to come from powerdown
-      ce_reset();
-      ret = NRF_SetRegisterBit(NRF_REG_CONFIG, CFG_BIT_PWR_UP);
       wait(15000);
-    case NRF_MODE_RX:
-    case NRF_MODE_TX:
-      // We expect to come from standby-I
-      if (mode == NRF_MODE_TX) {
-        ret = NRF_ResetRegisterBit(NRF_REG_CONFIG, CFG_BIT_PRIM_RX);
-      } else {
-        ret = NRF_SetRegisterBit(NRF_REG_CONFIG, CFG_BIT_PRIM_RX);
+      break;
+    case NRF_MODE_STANDBY1:
+      switch(current_mode) {
+        case NRF_MODE_POWERDOWN:
+          ret = NRF_SetRegisterBit(NRF_REG_CONFIG, CFG_BIT_PWR_UP);
+          break;
+        case NRF_MODE_RX:
+        case NRF_MODE_TX:
+          ce_reset();
+          break;
       }
-
-      // Enter mode
+      break;
+    case NRF_MODE_RX:
+      if (current_mode != NRF_MODE_STANDBY1) {
+        return NRF_BAD_TRANSITION;
+      }
+      ret = NRF_ResetRegisterBit(NRF_REG_CONFIG, CFG_BIT_PRIM_RX);
+      ce_set();
+      break;
+    case NRF_MODE_TX:
+      if (current_mode != NRF_MODE_STANDBY1) {
+        return NRF_BAD_TRANSITION;
+      }
+      ret = NRF_SetRegisterBit(NRF_REG_CONFIG, CFG_BIT_PRIM_RX);
       ce_set();
       break;
     default:
       ret = NRF_ERROR;
       break;
+  }
+
+  if (ret == NRF_OK) {
+    printf("Mode switch: %d -> %d\r\n", current_mode, mode);
+    current_mode = mode;
   }
 
   return ret;
@@ -322,6 +336,10 @@ uint8_t NRF_ReadStatus() {
  *
  */
 
+int NRF_CurrentMode() {
+  return current_mode;
+}
+
 NRF_Status NRF_VerifySPI() {
   NRF_Status ret = NRF_OK;
   uint8_t write[5] = "0x57!";
@@ -353,10 +371,10 @@ void NRF_Reset() {
   // Flush FIFOs
   NRF_EnterMode(NRF_MODE_TX);
   NRF_SendCommand(NRF_CMD_FLUSH_TX);
-  ce_reset();
+  NRF_EnterMode(NRF_MODE_STANDBY1);
   NRF_EnterMode(NRF_MODE_RX);
   NRF_SendCommand(NRF_CMD_FLUSH_RX);
-  ce_reset();
+  NRF_EnterMode(NRF_MODE_STANDBY1);
 
   // Flush register
   NRF_WriteRegisterByte(NRF_REG_CONFIG,       0x0A);

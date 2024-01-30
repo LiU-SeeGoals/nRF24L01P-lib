@@ -105,12 +105,13 @@
  */
 typedef enum
 {
-  NRF_OK            = 0x00, //!< All went well
-  NRF_SPI_ERROR     = 0x01, //!< Unspecified SPI error
-  NRF_SPI_BUSY      = 0x02, //!< SPI device busy
-  NRF_SPI_TIMEOUT   = 0x03, //!< SPI communication timed out
-  NRF_ERROR         = 0x04, //!< Unspecified general error
-  NRF_MAX_RT        = 0x05  //!< Max retries on packet transmission
+  NRF_OK              = 0x00, //!< All went well
+  NRF_SPI_ERROR       = 0x01, //!< Unspecified SPI error
+  NRF_SPI_BUSY        = 0x02, //!< SPI device busy
+  NRF_SPI_TIMEOUT     = 0x03, //!< SPI communication timed out
+  NRF_ERROR           = 0x04, //!< Unspecified general error
+  NRF_MAX_RT          = 0x05, //!< Max retries on packet transmission
+  NRF_BAD_TRANSITION  = 0x06  //!< When an unallowed mode transition is tried
 } NRF_Status;
 
 
@@ -186,7 +187,8 @@ typedef enum
 //!@{
   /**
    * \brief Enter a specific @ref mode. See details.
-   * \warning We're not doing any handholding. Please look at figure 3
+   * \warning We're doing some handholding, but we don't keep track of entering
+   * Standby-II mode. If that happens, the behaviour is undefind. Please look at figure 3
    * page 21 in @datasheet to see what transitions make sense. And table 15
    * on page 23 for what register values means which mode.
    *
@@ -367,6 +369,16 @@ typedef enum
  * These can be useful for debugging.
  */
 //!@{
+
+  /**
+   * \brief Returns which mode we're believed to be in.
+   *
+   * \warning We don't keep track of entering Standby-II mode.
+   *
+   * \return see @ref mode
+   */
+  int NRF_CurrentMode();
+
   /**
    * \brief Verifies that SPI communication with the device works.
    *
@@ -386,7 +398,7 @@ typedef enum
    * and will leave in Standby-I mode.
    *
    * This is pretty overkill but useful for testing since the device
-   * doesn't reset all registers on a fast enough off-on power switch.
+   * doesn't reset all registers on a fast enough power reset.
    */
   void NRF_Reset();
 
