@@ -160,12 +160,12 @@ NRF_Status NRF_EnterMode(uint8_t mode) {
   switch(mode) {
     case NRF_MODE_POWERDOWN:
       ret = NRF_ResetRegisterBit(NRF_REG_CONFIG, CFG_BIT_PWR_UP);
-      wait(15000);
       break;
     case NRF_MODE_STANDBY1:
       switch(current_mode) {
         case NRF_MODE_POWERDOWN:
           ret = NRF_SetRegisterBit(NRF_REG_CONFIG, CFG_BIT_PWR_UP);
+          wait(15000);
           break;
         case NRF_MODE_RX:
         case NRF_MODE_TX:
@@ -177,14 +177,14 @@ NRF_Status NRF_EnterMode(uint8_t mode) {
       if (current_mode != NRF_MODE_STANDBY1) {
         return NRF_BAD_TRANSITION;
       }
-      ret = NRF_ResetRegisterBit(NRF_REG_CONFIG, CFG_BIT_PRIM_RX);
+      ret = NRF_SetRegisterBit(NRF_REG_CONFIG, CFG_BIT_PRIM_RX);
       ce_set();
       break;
     case NRF_MODE_TX:
       if (current_mode != NRF_MODE_STANDBY1) {
         return NRF_BAD_TRANSITION;
       }
-      ret = NRF_SetRegisterBit(NRF_REG_CONFIG, CFG_BIT_PRIM_RX);
+      ret = NRF_ResetRegisterBit(NRF_REG_CONFIG, CFG_BIT_PRIM_RX);
       ce_set();
       break;
     default:
