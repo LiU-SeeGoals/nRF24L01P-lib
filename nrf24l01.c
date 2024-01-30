@@ -159,18 +159,19 @@ NRF_Status NRF_EnterMode(uint8_t mode) {
 
   switch(mode) {
     case NRF_MODE_POWERDOWN:
+      csn_set();
+      ce_reset();
       ret = NRF_ResetRegisterBit(NRF_REG_CONFIG, CFG_BIT_PWR_UP);
       break;
     case NRF_MODE_STANDBY1:
-      switch(current_mode) {
-        case NRF_MODE_POWERDOWN:
-          ret = NRF_SetRegisterBit(NRF_REG_CONFIG, CFG_BIT_PWR_UP);
-          wait(15000);
-          break;
-        case NRF_MODE_RX:
-        case NRF_MODE_TX:
-          ce_reset();
-          break;
+      if (current_mode == NRF_MODE_POWERDOWN) {
+        ret = NRF_SetRegisterBit(NRF_REG_CONFIG, CFG_BIT_PWR_UP);
+        wait(1500);
+      } else if (current_mode == NRF_MODE_RX) {
+        ret = NRF_ResetRegisterBit(NRF_REG_CONFIG, CFG_BIT_PRIM_RX);
+        ce_reset();
+      } else if (current_mode == NRF_MODE_TX) {
+        ce_reset();
       }
       break;
     case NRF_MODE_RX:
@@ -193,7 +194,6 @@ NRF_Status NRF_EnterMode(uint8_t mode) {
   }
 
   if (ret == NRF_OK) {
-    printf("Mode switch: %d -> %d\r\n", current_mode, mode);
     current_mode = mode;
   }
 
@@ -211,7 +211,7 @@ NRF_Status NRF_ReadPayload(uint8_t *read, uint8_t length) {
 NRF_Status NRF_Transmit(uint8_t *payload, uint8_t length) {
   NRF_Status ret = NRF_OK;
   ret = NRF_WritePayload(payload, length);
-  if(ret != NRF_OK) {
+  if (ret != NRF_OK) {
     return ret;
   }
 
@@ -226,7 +226,7 @@ NRF_Status NRF_TransmitAndWait(uint8_t *payload, uint8_t length) {
   NRF_Status ret = NRF_OK;
 
   ret = NRF_WritePayload(payload, length);
-  if(ret != NRF_OK) {
+  if (ret != NRF_OK) {
     return ret;
   }
 
@@ -235,7 +235,7 @@ NRF_Status NRF_TransmitAndWait(uint8_t *payload, uint8_t length) {
 
   // Wait for status update
   uint8_t status;
-  for(;;) {
+  for (;;) {
     status = NRF_ReadStatus();
     if (status & (1<<STATUS_BIT_TX_DS)) {
       // Packet transmitted
@@ -364,9 +364,8 @@ NRF_Status NRF_VerifySPI() {
 }
 
 void NRF_Reset() {
-  // Reset state (goto standby-I)
-  csn_set();
-  ce_reset();
+  NRF_EnterMode(NRF_MODE_POWERDOWN);
+  NRF_EnterMode(NRF_MODE_STANDBY1);
 
   // Flush FIFOs
   NRF_EnterMode(NRF_MODE_TX);
@@ -430,5 +429,19 @@ void NRF_PrintFIFOStatus() {
   printf("TX_EMPTY:   %2X\r\n", (reg & (1<<FIFO_STATUS_BIT_TX_EMPTY))    >> 4);
   printf("TX_FULL:    %2X\r\n", (reg & (1<<FIFO_STATUS_BIT_TX_FULL))     >> 5);
   printf("TX_REUSE:   %2X\r\n", (reg & (1<<FIFO_STATUS_BIT_TX_REUSE))    >> 6);
+  printf("\r\n");
+}
+
+void NRF_PrintConfig() {
+  uint8_t reg = NRF_ReadRegisterByte(NRF_REG_CONFIG);
+
+  printf("Config register: %02X\r\n", reg);
+  printf("PRIM_RX:      %1X\r\n", reg & (1<<0));
+  printf("PWR_UP:       %1X\r\n", reg & (1<<1));
+  printf("CRCO:         %1X\r\n", reg & (1<<2));
+  printf("EN_CRC:       %1X\r\n", reg & (1<<3));
+  printf("MASK_MAX_RT:  %1X\r\n", reg & (1<<4));
+  printf("MASK_TX_DS:   %1X\r\n", reg & (1<<5));
+  printf("MASK_RX_DR:   %1X\r\n", reg & (1<<6));
   printf("\r\n");
 }

@@ -394,8 +394,7 @@ typedef enum
    * \brief Reset all registers/FIFOs to initial values
    * specified in @datasheet table 27 on page 59.
    *
-   * \note The device is expected to enter in Standby-I mode
-   * and will leave in Standby-I mode.
+   * \note The device will leave in Standby-I mode.
    *
    * This is pretty overkill but useful for testing since the device
    * doesn't reset all registers on a fast enough power reset.
@@ -411,6 +410,11 @@ typedef enum
    * \brief printf:s the bits from the FIFO status register.
    */
   void NRF_PrintFIFOStatus();
+
+  /**
+   * \brief printf:s the config register.
+   */
+  void NRF_PrintConfig();
 //!@}
 
 #endif /* NRF24L01_H */
