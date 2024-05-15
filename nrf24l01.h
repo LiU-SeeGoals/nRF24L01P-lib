@@ -240,6 +240,12 @@ typedef enum
   NRF_Status NRF_Transmit(uint8_t *payload, uint8_t length);
 
   /**
+   * \brief Transmit the payload already in the TX buffer. When
+   * a message is sent but no ack is received, it stays in the TX buffer.
+   */
+  void NRF_ReTransmit();
+
+  /**
    * \brief Transmit the specified payload from standby-I mode and wait for
    * an ACK or max retries. Usually this is handled through interrupts.
    *

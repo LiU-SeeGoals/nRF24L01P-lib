@@ -222,6 +222,12 @@ NRF_Status NRF_Transmit(uint8_t *payload, uint8_t length) {
   return ret;
 }
 
+void NRF_ReTransmit() {
+  ce_set();
+  wait(10);
+  ce_reset();
+}
+
 NRF_Status NRF_TransmitAndWait(uint8_t *payload, uint8_t length) {
   NRF_Status ret = NRF_OK;
 
