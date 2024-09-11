@@ -223,6 +223,20 @@ NRF_Status NRF_Transmit(uint8_t *payload, uint8_t length) {
   return ret;
 }
 
+NRF_Status NRF_TransmitNoAck(uint8_t* payload, uint8_t length) {
+  NRF_Status ret = NRF_OK;
+  ret = NRF_WritePayloadNoAck(payload, length);
+  if (ret != NRF_OK) {
+    return ret;
+  }
+
+  ce_set();
+  wait(10);
+  ce_reset();
+
+  return ret;
+}
+
 void NRF_ReTransmit() {
   ce_set();
   wait(10);
