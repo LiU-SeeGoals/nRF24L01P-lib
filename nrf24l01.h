@@ -18,7 +18,7 @@
 //!@{
 
 //! Timeout for all SPI communication attempts.
-#define NRF_SPI_TIMEOUT_DUR     HAL_MAX_DELAY
+#define NRF_SPI_TIMEOUT_DUR 10
 //!@}
 
 
